@@ -1,0 +1,64 @@
+@startuml
+title Messenger - Data Flow Diagram
+
+top to bottom direction
+
+' External Entity
+rectangle "Existing Messenger User" as User
+
+' Processes
+usecase "1.0\nManage User Profiles" as P1
+usecase "2.0\nProcess Messages" as P2
+usecase "3.0\nManage Groups" as P3
+usecase "4.0\nRetrieve Message History" as P4
+usecase "5.0\nGenerate Notifications" as P5
+
+' Data Stores
+database "D1\nUser Profiles" as D1
+database "D2\nMessages" as D2
+database "D3\nGroups and Membership" as D3
+
+' External Entity Data Flows
+User --> P1 : Profile view or update request
+P1 --> User : Profile information or update result
+
+User --> P2 : Message submission or modification request
+P2 --> User : Message processing result
+
+User --> P3 : Group creation or membership request
+P3 --> User : Group or membership information
+
+User --> P4 : Conversation history request
+P4 --> User : Previous conversation messages
+
+P5 --> User : New message notification
+
+' Data Store Flows
+
+' D1 - User Profiles
+P1 --> D1 : Updated profile information
+D1 --> P1 : Existing user profile information
+D1 --> P2 : Existing recipient identity information
+
+' D2 - Messages
+P2 --> D2 : Message creation, edit, or deletion updates
+D2 --> P2 : Existing message information
+
+D2 --> P4 : Stored conversation messages
+
+' D3 - Groups and Membership
+P3 --> D3 : Group and membership updates
+D3 --> P3 : Existing group and membership information
+D3 --> P2 : Group membership information
+D3 --> P4 : Group membership information for history access
+
+' Notification Data Flow
+P2 --> P5 : New message and recipient information
+
+
+' Layout Adjustment
+D2 -[hidden]down- P4
+
+
+
+@enduml

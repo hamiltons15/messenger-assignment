@@ -1,0 +1,60 @@
+@startuml
+title Messenger - Private Messaging Sequence Diagram
+
+actor "Sender" as Sender
+boundary "Messenger Interface" as UI
+control "Message Processing" as P2
+control "Retrieve Message History" as P4
+database "User Profiles" as D1
+database "Messages" as D2
+control "Notification Processing" as P5
+actor "Recipient" as Recipient
+
+' Sender Submits a Private Message
+Sender -> UI : Submit private message(recipient ID, message content)
+UI -> P2 : Process private message(recipient ID, message content)
+
+' Identify the Intended Recipient
+P2 -> D1 : Look up existing recipient(recipient ID)
+D1 --> P2 : Recipient lookup result
+
+' Recipient Lookup Outcomes
+alt Recipient exists
+    ' Store the Private Message
+    P2 -> D2 : Store private message(sender ID, recipient ID, content)
+    D2 --> P2 : Message storage result
+
+    ' Message Storage Outcomes
+    alt Message stored successfully
+        ' Confirm Successful Message Submission
+        P2 --> UI : Message stored successfully
+        UI --> Sender : Display message sent confirmation
+
+        ' Generate New Message Notification
+        P2 -> P5 : New message and recipient information
+        P5 --> Recipient : New private message notification
+
+
+         ' Recipient Opens the Private Conversation
+        Recipient -> UI : Open private conversation
+        UI -> P4 : Request private conversation history
+        P4 -> D2 : Retrieve stored conversation messages
+        D2 --> P4 : Stored private conversation messages
+        P4 --> UI : Private conversation history
+        UI --> Recipient : Display conversation messages
+
+    else Message storage failed
+        P2 --> UI : Message storage failed
+        UI --> Sender : Display message failure
+    end
+
+else Recipient does not exist 	
+    P2 --> UI : Recipient not found
+    UI --> Sender : Display recipient error
+end
+
+
+
+
+
+@enduml
