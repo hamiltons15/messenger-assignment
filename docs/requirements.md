@@ -75,6 +75,13 @@ The Messenger prototype system shall allow users to access and view their basic 
 
 **Source:** Statement of Work, Section 3.1, User Profiles.
 
+### FR-09 - Conversation Access Control
+
+The Messenger prototype system shall restrict access to private conversation messages and stored message history to users authorized to view those conversations. Private conversation messages shall only be accessible to the intended participants. Group conversation messages shall only be accessible to users permitted under the established group membership and message history access rules. The system shall enforce these access restrictions when retrieving messages from storage.
+
+**Source:** Ethics Reflection, Section 3.1, Unauthorized Access to Conversations.
+
+
 
 ## 3. Non-Functional Requirements
 
@@ -146,6 +153,13 @@ FR-07 will be satisfied when a new private message triggers a notification for t
 **Related Requirement:** FR-08
 
 FR-08 will be satisfied when a user accesses and views their basic profile, modifies permitted profile information, and the Messenger prototype system correctly displays the updated profile information.
+
+### AC-09 - Conversation Access Control
+
+**Related Requirement:** FR-09
+
+FR-09 will be satisfied when the Messenger prototype demonstrates that only authorized users can retrieve and view private or group conversation messages. Testing must verify that the intended participants can access their private conversation history and that unrelated users are denied access. For group conversations, testing must verify that message access follows the established group membership and message history access rules, including the behavior defined for membership changes. The specific group history access rules must be resolved under UQ-04 before final acceptance testing.
+
 
 
 ## 5. Assumptions and Unresolved Questions
@@ -221,7 +235,7 @@ The Statement of Work excludes advanced encryption beyond standard security prot
 
 ## 6. Requirements Traceability
 
-The following table traces each requirement to its source within the Statement of Work and to its related acceptance criteria where applicable.
+The following table traces each requirement to its source or supporting rationale and to its related acceptance criteria where applicable. Most requirements originate from the Statement of Work, while FR-09 was added as a result of the ethical analysis documented in the Ethics Reflection.
 
 For requirements that do not have a dedicated acceptance criterion, "Verified by prototype review" means that the completed Messenger prototype will be reviewed to confirm that it follows the stated requirement or constraint. For scope constraints, this includes confirming that capabilities explicitly identified as outside the project scope have not been implemented as part of the prototype.
 
@@ -235,6 +249,7 @@ For requirements that do not have a dedicated acceptance criterion, "Verified by
 | FR-06 | Message Editing and Deletion | Statement of Work, Section 3.1, Message Editing and Deletion | AC-06 |
 | FR-07 | Message Notifications | Statement of Work, Section 3.1, Notifications | AC-07 |
 | FR-08 | User Profiles | Statement of Work, Section 3.1, User Profiles | AC-08 |
+| FR-09 | Conversation Access Control | Ethics Reflection, Section 3.1, Unauthorized Access to Conversations | AC-09 |
 | NFR-01 | Prototype Access Constraint | Statement of Work, Sections 3.2 and 5.2, User Registration and Authentication and User Authentication | AC-01 and prototype review |
 | NFR-02 | Prototype Scope Constraint | Statement of Work, Sections 3.2 and 5.2, Project Scope | N/A - Verified by prototype review |
 | NFR-03 | Message Persistence | Statement of Work, Sections 3.1 and 7.2, Message History | AC-05 |
