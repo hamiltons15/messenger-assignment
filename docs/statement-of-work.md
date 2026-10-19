@@ -3,10 +3,21 @@
 **Project:** Messenger Application
 **Student:** Sean Hamilton
 **Course:** CPS 490 - Capstone I
-**Document Status:** Draft-Revised: Oct 18, 2026
+
+**Document Status:** Draft
+**Last Revised:** October 18, 2026
 
 **Submission Date:** October 12, 2026
 **Project Delivery Deadline:** November 2, 2026
+
+---
+
+## Revision History
+
+| Date | Revision | Description |
+|---|---|---|
+| October 12, 2026 | Initial Draft | Established the original project objectives, stakeholders, scope, deliverables, schedule, and acceptance criteria for Messenger. |
+| October 18, 2026 | IA-06 Implementation Revisions | Updated the Statement of Work to reflect the implementation requirements established by IA-06. Changes include account registration and authentication, persistent messaging, real time communication, server side authorization, the required technology stack, revised project milestones, and expanded acceptance criteria. The additional features established in the original project scope have been retained. |
 
 ---
 
