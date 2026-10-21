@@ -3,58 +3,154 @@ title Messenger - Private Messaging Sequence Diagram
 
 actor "Sender" as Sender
 boundary "Messenger Interface" as UI
-control "Message Processing" as P2
+control "Account Authentication" as Auth
+control "Conversation Authorization" as Access
+control "Message Processing" as P3
 control "Retrieve Message History" as P4
-database "User Profiles" as D1
+database "User Accounts and Profiles" as D1
+database "Conversations and Membership" as D3
 database "Messages" as D2
-control "Notification Processing" as P5
+control "Real-Time Delivery and Notifications" as P5
 actor "Recipient" as Recipient
 
 ' Sender Submits a Private Message
-Sender -> UI : Submit private message(recipient ID, message content)
-UI -> P2 : Process private message(recipient ID, message content)
+group Send Private Message
+    Sender -> UI : Submit private message(conversation ID, content)
+    UI -> Auth : Submit message request with JWT
 
-' Identify the Intended Recipient
-P2 -> D1 : Look up existing recipient(recipient ID)
-D1 --> P2 : Recipient lookup result
+    ' Verify Sender JWT
+    Auth -> Auth : Verify JWT signature and claims
 
-' Recipient Lookup Outcomes
-alt Recipient exists
-    ' Store the Private Message
-    P2 -> D2 : Store private message(sender ID, recipient ID, content)
-    D2 --> P2 : Message storage result
+    ' Reject Invalid Sender JWT
+    break Sender JWT invalid or expired
+        Auth --> UI : Authentication failed
+        UI --> Sender : Display authentication error
+    end
 
-    ' Message Storage Outcomes
-    alt Message stored successfully
-        ' Confirm Successful Message Submission
-        P2 --> UI : Message stored successfully
-        UI --> Sender : Display message sent confirmation
+    ' Verify Registered Sender Account
+    Auth -> D1 : Look up account using verified identity
+    D1 --> Auth : Account information
 
-        ' Generate New Message Notification
-        P2 -> P5 : New message and recipient information
-        P5 --> Recipient : New private message notification
+    ' Reject Invalid Sender Account
+    break Sender account missing or inactive
+        Auth --> UI : Authentication failed
+        UI --> Sender : Display authentication error
+    end
 
+    Auth --> UI : Verified sender identity
 
-         ' Recipient Opens the Private Conversation
-        Recipient -> UI : Open private conversation
-        UI -> P4 : Request private conversation history
-        P4 -> D2 : Retrieve stored conversation messages
-        D2 --> P4 : Stored private conversation messages
-        P4 --> UI : Private conversation history
-        UI --> Recipient : Display conversation messages
+    ' Verify Sender Conversation Access
+    UI -> Access : Request conversation access(sender, conversation ID)
+    Access -> D3 : Check sender membership
+    D3 --> Access : Membership result
 
-    else Message storage failed
-        P2 --> UI : Message storage failed
+    ' Sender Authorization Failure
+    break Sender not authorized
+        Access --> UI : Conversation access denied
+        UI --> Sender : Display authorization error
+    end
+
+    Access -> P3 : Authorized message request(sender, conversation ID, content)
+
+    ' Identify and Validate Private Conversation
+    P3 -> D3 : Retrieve conversation details(conversation ID)
+    D3 --> P3 : Conversation type and participants
+    P3 -> P3 : Validate message content and conversation type
+
+    ' Message Validation Failure
+    break Invalid message or conversation
+        P3 --> UI : Message validation failed
+        UI --> Sender : Display validation error
+    end
+
+    ' Store Validated Message
+    P3 -> D2 : Store message(sender, conversation ID, content)
+    D2 --> P3 : Message storage result
+
+    ' Message Storage Failure
+    break Message storage failed
+        P3 --> UI : Message storage failed
         UI --> Sender : Display message failure
     end
 
-else Recipient does not exist 	
-    P2 --> UI : Recipient not found
-    UI --> Sender : Display recipient error
+    ' Confirm Successful Storage
+    P3 --> UI : Message stored successfully
+    UI --> Sender : Display message sent confirmation
+
+    ' Real-Time Message Delivery
+    P3 -> P5 : Successfully stored message information
+    P5 -> D3 : Verify recipient conversation membership
+    D3 --> P5 : Recipient membership result
+
+    ' Recipient Delivery Outcomes
+    alt Recipient authorized and connected
+        P5 --> Recipient : Deliver message through Socket.IO
+        P5 --> Recipient : Send new message notification
+
+    else Recipient authorized but offline
+        P5 -> P5 : No active Socket.IO connection
+        note right of P5
+            Message remains stored in D2.
+            Recipient can retrieve it through
+            authenticated conversation history.
+        end note
+
+    else Recipient not authorized
+        P5 -> P5 : Do not deliver protected message
+    end
 end
 
+' Recipient Requests Stored Conversation History
+group Retrieve Private Conversation History
+    Recipient -> UI : Open private conversation
+    UI -> Auth : Request conversation history with JWT
 
+    ' Verify Recipient JWT
+    Auth -> Auth : Verify JWT signature and claims
 
+    ' Reject Invalid Recipient JWT
+    break Recipient JWT invalid or expired
+        Auth --> UI : Authentication failed
+        UI --> Recipient : Display authentication error
+    end
 
+    ' Verify Registered Recipient Account
+    Auth -> D1 : Look up account using verified identity
+    D1 --> Auth : Account information
+
+    ' Reject Invalid Recipient Account
+    break Recipient account missing or inactive
+        Auth --> UI : Authentication failed
+        UI --> Recipient : Display authentication error
+    end
+
+    Auth --> UI : Verified recipient identity
+
+    ' Verify Recipient History Access
+    UI -> Access : Request history access(recipient, conversation ID)
+    Access -> D3 : Check recipient membership
+    D3 --> Access : Membership result
+
+    ' History Authorization Failure
+    break Recipient not authorized for history
+        Access --> UI : History access denied
+        UI --> Recipient : Display access error
+    end
+
+    ' Retrieve Stored Conversation Messages
+    Access -> P4 : Authorized history request
+    P4 -> D2 : Retrieve stored conversation messages
+    D2 --> P4 : Message history retrieval result
+
+    ' History Retrieval Outcomes
+    alt History retrieved successfully
+        P4 --> UI : Authorized conversation history
+        UI --> Recipient : Display conversation messages
+
+    else History retrieval failed
+        P4 --> UI : History retrieval failed
+        UI --> Recipient : Display history error
+    end
+end
 
 @enduml
