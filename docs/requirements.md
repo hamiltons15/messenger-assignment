@@ -5,7 +5,7 @@
 **Course:** CPS 490 - Capstone I  
 
 **Document Status:** Draft 
-**Last Revised:** October 19, 2026  
+**Last Revised:** October 22, 2026
 
 **Submission Date:** October 12, 2026
 
@@ -17,6 +17,7 @@
 |---|---|---|
 | October 12, 2026 | Initial Requirements | Established the original functional requirements, nonfunctional requirements, acceptance criteria, assumptions, open questions, and traceability for the Messenger application. |
 | October 19, 2026 | IA-06 Requirements Revision | Updated the requirements to reflect the required implementation technology stack, internal account registration and authentication, conversation authorization, persistent messaging, real-time delivery, application reliability, and reproducible local execution. Expanded the functional requirements, nonfunctional requirements, acceptance criteria, and traceability mappings while preserving existing requirement identifiers. Reviewed assumptions and open questions to distinguish established implementation requirements from unresolved design decisions. |
+| October 22, 2026 | Authentication Implementation Decisions | Updated UQ-07 and UQ-10 to document registration and authentication decisions made during implementation. Established username validation rules, case insensitive username uniqueness, and password requirements of 6 or more characters with a maximum of 72 UTF-8 bytes. Defined JWT expiration as one hour, requiring users to log in again after expiration. Updated the remaining open questions to reflect the decisions that have been resolved. |
 
 ---
 
@@ -840,37 +841,43 @@ The system will preserve conversation access restrictions when processing messag
 
 #### UQ-07 - Basic Profile Information
 
-**Status:** Unresolved
+**Status:** Partially Resolved
 
 **Question:** What user information will the Messenger system collect during registration, display in user profiles, and allow users to modify?
 
 **Established Decisions:**
 
-The Messenger system will support internal user registration and authentication.
+The Messenger system will support internal user registration using a username and password. An email address and display name will not be required during registration.
 
-Each registered user will have a unique account identity and associated profile information stored persistently in MongoDB.
+Each registered user will have a unique account ID and a unique username. The username will serve as the account identifier used for login and identifying registered users within Messenger.
 
-The system will securely hash account passwords using bcrypt and use JWT based authentication to identify users accessing protected functionality.
+The system will securely hash account passwords using bcrypt before storing them in MongoDB. Plaintext passwords will not be stored, and password hashes will not be exposed in account or profile responses.
+
+The system will validate registration information and reject requests containing missing required fields or usernames that are already registered.
+
+The system will use JWT based authentication to identify users accessing protected functionality.
 
 Authenticated users will be able to view and update permitted profile information. The backend will validate profile changes and enforce authorization to prevent users from modifying another user's account information without permission.
 
+Usernames must contain between 3 and 30 characters and may include letters, numbers, and underscores. Username uniqueness will be enforced without regard to letter case, so usernames such as `Sean` and `sean` cannot belong to separate accounts.
+
+The backend will reject registration requests containing usernames that do not satisfy these validation rules.
+
 **Remaining Open Questions:**
 
-1. Which fields will be required during registration, such as username, email address, password, or display name?
+1. Which profile fields will be visible to other registered users?
 
-2. Which profile fields will be visible to other registered users?
+2. Which profile fields will users be allowed to modify after registration?
 
-3. Which profile fields will users be allowed to modify after registration?
+3. Will Messenger support optional profile information, such as a profile picture or short biography?
 
-4. Will Messenger support optional profile information, such as a profile picture or short biography?
-
-5. What validation rules and uniqueness constraints will apply to usernames, email addresses, and other profile fields?
-
-6. If a user changes their display name or other identifying profile information, how should that change appear in existing conversations and message history?
+4. If a user changes their username or other identifying profile information, how should that change appear in existing conversations and message history?
 
 **Related Requirements:** FR-01, FR-08, FR-09, FR-10, AC-01, AC-08, AC-10
 
 **Source:** Statement of Work, Section 3.1, User Registration and Authentication and User Profiles; IA-06, Account Registration and Authentication Requirements.
+
+**Implementation Decision:** October 21, 2026. Registration will require a unique username and password without requiring an email address or display name.
 
 
 #### UQ-08 - History Persistence and Retention
@@ -959,17 +966,20 @@ The system will validate submitted information and reject unauthorized operation
 
 Application secrets and credentials will be excluded from version control. The project will provide an example environment configuration file without including actual secrets.
 
+Account passwords must contain at least 6 characters and must not exceed 72 bytes when encoded as UTF-8. The system will not require passwords to contain specific combinations of uppercase letters, lowercase letters, numbers, or special characters.
+
+The backend will enforce these password validation rules during registration and securely hash accepted passwords using bcrypt before storing them.
+
+The Messenger system will issue JWTs with an expiration period of one hour. The backend will reject expired tokens when users attempt to access protected operations. Users whose authentication tokens expire will be required to log in again to obtain a new token.
+
+
 **Remaining Open Questions:**
 
-1. What JWT expiration period will the application use, and how will expired sessions be handled?
+1. How will the browser store and manage authentication tokens during an active session?
 
-2. How will the browser store and manage authentication tokens during an active session?
+2. Will additional protections, such as login attempt limits or account lockouts, be implemented?
 
-3. Will additional protections, such as login attempt limits or account lockouts, be implemented?
-
-4. What password complexity requirements will apply during account registration?
-
-5. What additional safeguards, if any, will be needed for the local development and evaluation environment?
+3. What additional safeguards, if any, will be needed for the local development and evaluation environment?
 
 **Related Requirements:** FR-01, FR-09, FR-10, NFR-01, NFR-04, NFR-05, AC-01, AC-09, AC-10, AC-13, AC-14
 
@@ -1006,4 +1016,3 @@ The following tables map the Messenger system's functional and nonfunctional req
 | NFR-03 | Message Persistence | AC-05, AC-11 | Statement of Work, Section 3.1; IA-06 |
 | NFR-04 | Application Reliability and Error Handling | AC-13 | Statement of Work, Section 3.1; IA-06 |
 | NFR-05 | Reproducible Local Execution | AC-14 | Statement of Work, Sections 3.1 and 7.2; IA-06 |
-
