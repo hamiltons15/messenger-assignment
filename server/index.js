@@ -4,6 +4,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 
 const User = require("./models/User");
+const Conversation = require("./models/Conversation");
+
 const validateRegistration = require("./utils/validateRegistration");
 const { hashPassword, verifyPassword } = require("./utils/password");
 const { createToken } = require("./utils/token");
@@ -152,6 +154,100 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
       error: "Unable to retrieve current user."
     });
   }
+});
+
+app.post("/api/conversations", requireAuth, async (req, res) => {
+  const { type, members } = req.body || {};
+
+  if (type !== "direct" && type !== "group") {
+    return res.status(400).json({
+      error: "Conversation type must be direct or group."
+    });
+  }
+
+  if (!Array.isArray(members) || members.length === 0) {
+    return res.status(400).json({
+      error: "Conversation members must be a nonempty array."
+    });
+  }
+
+  if (
+    !members.every(member =>
+      typeof member === "string" &&
+      mongoose.isObjectIdOrHexString(member)
+    )
+  ) {
+    return res.status(400).json({
+      error: "Every conversation member must have a valid user ID."
+    });
+  }
+
+  if (type === "direct" && members.length !== 2) {
+    return res.status(400).json({
+      error: "Direct conversations require exactly 2 members."
+    });
+  }
+
+  if (type === "group" && members.length < 3) {
+    return res.status(400).json({
+      error: "Group conversations require at least 3 members."
+    });
+  }
+
+  if (new Set(members).size !== members.length) {
+    return res.status(400).json({
+      error: "Conversation members must be unique."
+    });
+  }
+
+  if (!members.includes(req.userId)) {
+    return res.status(403).json({
+      error: "You must be a member of the conversation."
+    });
+  }
+
+  try {
+    const existingMembers = await User.countDocuments({
+      _id: { $in: members }
+    });
+
+    if (existingMembers !== members.length) {
+        return res.status(400).json({
+          error: "One or more conversation members do not exist."
+        });
+      }
+
+    if (type === "direct") {
+        const existingConversation = await Conversation.findOne({
+          type: "direct",
+          members: { $all: members, $size: 2 }
+        });
+
+        if (existingConversation) {
+          return res.status(409).json({
+            error: "A direct conversation already exists between these users."
+          });
+        }
+      }
+
+    const conversation = await Conversation.create({
+      type,
+      members,
+      createdBy: req.userId
+    });
+
+    return res.status(201).json({
+      message: "Conversation created successfully.",
+      conversation
+    });
+  } catch (error) {
+    console.error("Conversation creation failed:", error);
+
+    return res.status(500).json({
+      error: "Unable to create conversation."
+    });
+  }
+
 });
 
 async function startServer() {
