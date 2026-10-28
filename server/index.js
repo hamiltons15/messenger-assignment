@@ -22,7 +22,17 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-app.post("/api/auth/register", async (req, res) => {
+function requireDatabase(req, res, next) {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      error: "Database unavailable."
+    });
+  }
+
+  next();
+}
+
+app.post("/api/auth/register", requireDatabase, async (req, res) => {
   try {
     const { username, password } = req.body || {};
 
@@ -74,7 +84,7 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", requireDatabase, async (req, res) => {
   try {
     const { username, password } = req.body || {};
 
@@ -131,7 +141,7 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-app.get("/api/auth/me", requireAuth, async (req, res) => {
+app.get("/api/auth/me", requireDatabase, requireAuth, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
 
@@ -156,7 +166,7 @@ app.get("/api/auth/me", requireAuth, async (req, res) => {
   }
 });
 
-app.post("/api/conversations", requireAuth, async (req, res) => {
+app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) => {
   const { type, members } = req.body || {};
 
   if (type !== "direct" && type !== "group") {
@@ -238,8 +248,14 @@ app.post("/api/conversations", requireAuth, async (req, res) => {
 
     return res.status(201).json({
       message: "Conversation created successfully.",
-      conversation
+      conversation: {
+        id: conversation._id.toString(),
+        type: conversation.type,
+        members: conversation.members,
+        createdBy: conversation.createdBy
+      }
     });
+
   } catch (error) {
     console.error("Conversation creation failed:", error);
 
@@ -259,9 +275,13 @@ async function startServer() {
     await mongoose.connect(MONGO_URI);
     console.log("Connected to MongoDB");
 
+    await User.init();
+    console.log("User indexes initialized");
+
     app.listen(PORT, () => {
       console.log(`Messenger server running on port ${PORT}`);
     });
+
   } catch (error) {
     console.error("Failed to start Messenger:", error.message);
     process.exit(1);

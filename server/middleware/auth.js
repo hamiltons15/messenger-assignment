@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const { verifyToken } = require("../utils/token");
 
 function requireAuth(req, res, next) {
@@ -20,7 +21,10 @@ function requireAuth(req, res, next) {
   try {
     const decoded = verifyToken(token);
 
-    if (typeof decoded.sub !== "string" || !decoded.sub) {
+    if (
+      typeof decoded.sub !== "string" ||
+      !mongoose.isObjectIdOrHexString(decoded.sub)
+    ) {
       return res.status(401).json({
         error: "Invalid authentication token."
       });

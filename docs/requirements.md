@@ -18,6 +18,7 @@
 | October 12, 2026 | Initial Requirements | Established the original functional requirements, nonfunctional requirements, acceptance criteria, assumptions, open questions, and traceability for the Messenger application. |
 | October 19, 2026 | IA-06 Requirements Revision | Updated the requirements to reflect the required implementation technology stack, internal account registration and authentication, conversation authorization, persistent messaging, real-time delivery, application reliability, and reproducible local execution. Expanded the functional requirements, nonfunctional requirements, acceptance criteria, and traceability mappings while preserving existing requirement identifiers. Reviewed assumptions and open questions to distinguish established implementation requirements from unresolved design decisions. |
 | October 22, 2026 | Authentication Implementation Decisions | Updated UQ-07 and UQ-10 to document registration and authentication decisions made during implementation. Established username validation rules, case insensitive username uniqueness, and password requirements of 6 or more characters with a maximum of 72 UTF-8 bytes. Defined JWT expiration as one hour, requiring users to log in again after expiration. Updated the remaining open questions to reflect the decisions that have been resolved. |
+| October 26, 2026 | Conversation Implementation Decisions | Documented the conversation creation rules established during implementation. Confirmed that direct conversations require exactly two distinct registered users, group conversations require at least three distinct registered users, and the authenticated creator must be included in the conversation membership. Verified that conversation creation enforces input validation, membership authorization, and persistent storage. |
 
 ---
 
@@ -721,7 +722,7 @@ External notification services, email notifications, and operating system push n
 
 #### UQ-03 - Group Membership Permissions
 
-**Status:** Unresolved
+**Status:** Partially Resolved
 
 **Question:** Which users will have permission to add or remove members from a group conversation, and what restrictions will apply to those operations?
 
@@ -732,6 +733,8 @@ The Messenger system will allow authenticated users to create group conversation
 The system will enforce group membership permissions on the backend and reject membership changes attempted by users without the required authorization.
 
 Group membership information will be stored persistently in MongoDB. When membership changes occur, the system will update access permissions so that removed members cannot continue accessing protected group operations or receiving protected group events.
+
+Group conversations will initially require at least three distinct registered users. The authenticated user creating the group must be included in its membership, and the backend will reject requests containing duplicate members, invalid user identifiers, or nonexistent accounts. Group creation will use the authenticated user's verified JWT identity rather than accepting a creator identity supplied by the browser. The initial group membership and creator information will be stored persistently in MongoDB.
 
 **Remaining Open Questions:**
 
@@ -984,6 +987,35 @@ The Messenger system will issue JWTs with an expiration period of one hour. The 
 **Related Requirements:** FR-01, FR-09, FR-10, NFR-01, NFR-04, NFR-05, AC-01, AC-09, AC-10, AC-13, AC-14
 
 **Source:** Statement of Work, Section 3.1, User Registration and Authentication, Authorization and Conversation Privacy, and Security and Data Persistence; IA-06, Authentication, Authorization, Socket.IO Security, and Reproducible Setup Requirements.
+
+
+#### UQ-11 - Direct Conversation Creation and Duplicate Prevention
+
+**Status:** Partially Resolved
+
+**Question:** How will Messenger create direct conversations between registered users while preventing unintended duplicate conversations?
+
+**Established Decisions:**
+
+A direct conversation will contain exactly two distinct registered users. The authenticated user creating the conversation must be one of those members.
+
+The backend will validate both member identifiers, confirm that the registered users exist, and reject invalid or unauthorized creation requests.
+
+Before creating a direct conversation, the backend will check whether a direct conversation already exists between the same two users, regardless of the order in which their identifiers are provided.
+
+If an existing direct conversation is found, the current implementation will reject the duplicate creation request with an HTTP 409 Conflict response.
+
+Direct conversations will be stored persistently in MongoDB.
+
+**Remaining Open Questions:**
+
+1. Should the API return an existing direct conversation instead of responding with a conflict when the same users request another conversation?
+
+2. How should Messenger prevent duplicate direct conversations when simultaneous creation requests occur?
+
+**Related Requirements:** FR-02, FR-09, FR-10, AC-02, AC-09, AC-10
+
+**Source:** Statement of Work, Section 3.1, Private Messaging; IA-06, Direct Conversation and Authorization Requirements.
 
 
 ## 6. Requirements Traceability
