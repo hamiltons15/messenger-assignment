@@ -24,6 +24,13 @@ async function createMessage(conversationId, userId, content) {
     };
   }
 
+  if (mongoose.connection.readyState !== 1) {
+     return {
+       ok: false,
+       code: "server_error"
+     };
+   }
+
   const conversation = await Conversation.findOne({
     _id: conversationId,
     members: userId

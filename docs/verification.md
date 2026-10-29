@@ -360,23 +360,95 @@ These results verify the tested input validation behavior. They do not replace t
 | Live notifications resumed after reconnect | PASS |
 | Duplicate message IDs handled using a JavaScript Map | PASS |
 
-**Automated Regression Tests:**
+**Automated Regression and Integration Tests:**
 
-Command: `cd server && npm test`
+Unit test command: `cd server && npm test`
 
 Result: 25 tests passed, 0 failed.
 
-The 25 automated tests cover authentication, JWT verification, conversation validation, and message validation. The Socket.IO scenarios above were verified separately using manual Node.js integration scripts.
+The unit tests cover authentication middleware, JWT verification, conversation validation, and message validation.
+
+Socket.IO integration test command:
+
+`cd server && TP7_TEST_PASSWORD='<test-password>' npm run test:integration`
+
+Result: 2 tests passed, 0 failed.
+
+The permanent integration tests are stored in:
+
+- `server/integration-tests/socket-authorization.test.js`
+- `server/integration-tests/socket-deduplication.test.js`
+
+These tests require the Express server and MongoDB to be running, along with the existing test accounts and conversations.
+
+The integration tests create authorized messages in MongoDB. They are deliberately excluded from the standard `npm test` command.
+
+The controlled MongoDB outage test was performed separately and is not part of the routine integration-test suite.
 
 **Known Limitations and Remaining Work:**
 
-- Offline recovery and duplicate handling were demonstrated using a Node.js test client; integration into the React interface has not yet been verified.
-- Socket.IO integration scenarios have not yet been added to the automated test suite.
-- Additional failure scenarios, including Socket.IO submissions during a MongoDB outage and ambiguous acknowledgements after network interruptions, remain to be verified.
-- The tests do not establish exactly-once message creation when clients retry submissions after acknowledgement timeouts.
+- Offline recovery and duplicate handling were demonstrated using Node.js test clients; React interface integration has not yet been verified.
+- Automatic Socket.IO reconnection, token renewal, and history synchronization after transient connection loss require additional client-side verification.
+- The MongoDB readiness check prevents submissions when Mongoose is already disconnected, but does not eliminate all possible connection-loss races or buffered operations.
+- The current implementation does not guarantee exactly-once message creation when clients retry after acknowledgement timeouts. Client-generated request IDs and server-side idempotency controls remain future reliability improvements.
+- The permanent integration tests depend on previously created test accounts and conversation IDs. They do not currently provision an isolated test database or fixtures.
+- The controlled MongoDB outage test is not yet part of an automated, repeatable test suite.
+
+**Conversation-Specific Authorization Verification:**
+
+A single authenticated user was tested against two different conversations. Member C was not a member of the direct conversation but was an authorized member of the group conversation.
+
+| Test | Result |
+|---|---|
+| Member C denied direct conversation room access | PASS |
+| Member C denied direct conversation message submission | PASS |
+| Member C successfully joined the authorized group conversation | PASS |
+| Member C successfully submitted a group message | PASS |
+
+These results demonstrate that Socket.IO authorization depends on conversation membership rather than authentication alone.
+
+**MongoDB Outage and Message Persistence Verification:**
+
+A controlled database outage was performed by temporarily stopping the MongoDB Docker Compose service while two authenticated Socket.IO clients remained connected.
+
+The initial test exposed a delayed-write issue: the client acknowledgement timed out, but Mongoose subsequently persisted the message after MongoDB restarted.
+
+To address the observed behavior, a MongoDB connection readiness check was added to `server/services/createMessage.js` before querying conversation membership.
+
+After restarting the server, the outage test was repeated.
+
+| Test | Result |
+|---|---|
+| Authenticated Socket.IO clients connected before outage | PASS |
+| MongoDB service stopped successfully | PASS |
+| Failed submission returned `ok: false`, `code: "server_error"` | PASS |
+| No `message:new` notification during failed submission | PASS |
+| MongoDB restarted successfully | PASS |
+| No delayed message persisted after recovery | PASS |
+
+The database was queried after recovery to verify that the second failed submission had not been saved. Only the message from the original test remained.
+
+The readiness check addresses the tested disconnected-state scenario but does not eliminate all possible races if MongoDB becomes unavailable during an operation.
+
+**Sender Acknowledgement and Duplicate-Display Verification:**
+
+The sender joined the conversation room before submitting a Socket.IO message.
+
+| Test | Result |
+|---|---|
+| Sender received successful `message:send` acknowledgement | PASS |
+| Sender received corresponding `message:new` notification | PASS |
+| Acknowledgement and notification contained the same message ID | PASS |
+| Test client displayed the message only once using a Map keyed by message ID | PASS |
+
+This verifies the deduplication approach in a Node.js test client. React interface behavior has not yet been tested.
 
 **Conclusion:**
 
-The tested TP7 backend functionality passed authentication, authorization, real-time delivery, Socket.IO submission, membership revocation, room management, offline recovery, and duplicate-handling integration checks.
+The tested TP7 backend functionality passed authentication, conversation-specific authorization, real-time delivery, Socket.IO submission, membership revocation, room management, offline recovery, and sender acknowledgement/deduplication verification.
 
-The results demonstrate that messages can be persisted before notification, unauthorized Socket.IO writes are rejected, and disconnected clients can recover saved messages through authenticated HTTP history. React interface integration and additional failure testing remain outstanding.
+All 25 unit tests and both permanent Socket.IO integration tests passed.
+
+A controlled MongoDB outage initially revealed delayed message persistence after a client timeout. Following the addition of a database readiness check to the shared message-creation service, the repeated outage test returned `server_error`, produced no notification during the failed submission, and did not persist the rejected message after recovery.
+
+These results support completion of the tested TP7 backend scenarios. React integration, broader reconnection behavior, and stronger retry/idempotency guarantees remain future work.
