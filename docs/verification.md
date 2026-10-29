@@ -76,8 +76,11 @@ These tests verify that the application handles database disconnections without 
 
 ## 4. Known Limitations
 
-- Duplicate direct conversation prevention is not yet guaranteed for simultaneous creation requests.
-- Conversation creation is implemented, but message storage, history retrieval, and real-time delivery are not yet implemented in the application.
+- React interface integration for the implemented backend features remains to be verified.
+- Additional database failure, concurrency, and network interruption scenarios remain to be tested.
+- Socket.IO offline recovery and duplicate handling have been demonstrated in Node.js integration scripts but have not yet been verified in the React interface.
+- Message submission retries after acknowledgement timeouts do not currently have a verified persistent idempotency mechanism.
+
 
 ## 5. Verification Status
 
@@ -286,3 +289,94 @@ All three API regression tests returned the expected validation error messages.
 All 25 automated tests passed successfully. The conversation and message validation utilities correctly handled the tested valid and invalid inputs. The Express API regression tests confirmed that the refactored endpoints continued rejecting invalid input with the expected HTTP responses. Existing authentication and JWT tests also continued passing.
 
 These results verify the tested input validation behavior. They do not replace the separate membership, persistence, pagination, and authorization tests documented in earlier sections.
+
+### Tech Primer 7 — Socket.IO and Real-Time Communication Verification
+
+**Reference:** Tech Primer 7 (Ch04G), Socket.IO and Real-Time Communication
+
+**Test environment:** Ubuntu VM, Node.js, Express, Socket.IO, Socket.IO Client, MongoDB/Mongoose, JWT authentication, and Node.js integration scripts.
+
+**Implementation:**
+
+- Configured Socket.IO to use the existing HTTP server.
+- Implemented Socket.IO authentication using the existing JWT verification function.
+- Used the verified JWT subject as the authenticated socket user ID.
+- Implemented socket disconnection when the authenticated JWT expires.
+- Added user-specific Socket.IO rooms.
+- Implemented authorized conversation room joining.
+- Implemented conversation room leaving and rejoining.
+- Added real-time `message:new` notifications after successful HTTP message persistence.
+- Created a shared message persistence function used by HTTP and Socket.IO message submissions.
+- Implemented `message:send` with acknowledgements.
+- Enforced MongoDB conversation membership checks for Socket.IO message submissions.
+- Implemented live room revocation when a group member is removed.
+- Verified offline message recovery through the authenticated HTTP history endpoint.
+- Demonstrated client-side duplicate handling using message IDs.
+
+**Authentication and Authorization Verification:**
+
+- Missing, invalid, and expired JWTs were rejected during Socket.IO authentication.
+- A valid JWT allowed the authenticated socket to connect.
+- A short-lived JWT caused the socket to disconnect after expiration.
+- Authorized members successfully joined conversation rooms.
+- Nonmembers were denied access to conversation rooms.
+- Removing a group member revoked their existing room subscription.
+- Removed members could not rejoin the conversation.
+
+**HTTP Message Broadcast Verification:**
+
+- An authorized HTTP message submission returned HTTP 201.
+- The message was persisted before the real-time notification.
+- Authorized conversation subscribers received `message:new`.
+- The delivered message matched the saved message ID.
+- A nonmember did not receive the notification.
+
+**Socket.IO Message Submission Verification:**
+
+| Test | Result |
+|---|---|
+| Saved acknowledgement and verified sender | PASS |
+| Live delivery to another conversation member | PASS |
+| Invalid message content rejected | PASS |
+| Nonmember Socket.IO write rejected | PASS |
+| Saved message found in HTTP history | PASS |
+
+**Conversation Room Leaving Verification:**
+
+| Test | Result |
+|---|---|
+| Receives messages before leaving | PASS |
+| Leave acknowledged; socket remains connected | PASS |
+| No notifications after leaving | PASS |
+| Authorized rejoin succeeds | PASS |
+| Notifications resume after rejoining | PASS |
+
+**Offline Recovery and Duplicate Handling Verification:**
+
+| Test | Result |
+|---|---|
+| Member disconnected successfully | PASS |
+| Offline message recovered from HTTP history | PASS |
+| Live notifications resumed after reconnect | PASS |
+| Duplicate message IDs handled using a JavaScript Map | PASS |
+
+**Automated Regression Tests:**
+
+Command: `cd server && npm test`
+
+Result: 25 tests passed, 0 failed.
+
+The 25 automated tests cover authentication, JWT verification, conversation validation, and message validation. The Socket.IO scenarios above were verified separately using manual Node.js integration scripts.
+
+**Known Limitations and Remaining Work:**
+
+- Offline recovery and duplicate handling were demonstrated using a Node.js test client; integration into the React interface has not yet been verified.
+- Socket.IO integration scenarios have not yet been added to the automated test suite.
+- Additional failure scenarios, including Socket.IO submissions during a MongoDB outage and ambiguous acknowledgements after network interruptions, remain to be verified.
+- The tests do not establish exactly-once message creation when clients retry submissions after acknowledgement timeouts.
+
+**Conclusion:**
+
+The tested TP7 backend functionality passed authentication, authorization, real-time delivery, Socket.IO submission, membership revocation, room management, offline recovery, and duplicate-handling integration checks.
+
+The results demonstrate that messages can be persisted before notification, unauthorized Socket.IO writes are rejected, and disconnected clients can recover saved messages through authenticated HTTP history. React interface integration and additional failure testing remain outstanding.

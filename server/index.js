@@ -1,19 +1,187 @@
 require("dotenv").config();
 
+const http = require("node:http");
+const { Server } = require("socket.io");
 const express = require("express");
+const app = express();
+const httpServer = http.createServer(app);
+const io = new Server(httpServer);
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth.token;
+
+  if (typeof token !== "string" || !token) {
+    return next(new Error("Authentication required."));
+  }
+
+  try {
+    const decoded = verifyToken(token);
+
+    if (
+      typeof decoded.sub !== "string" ||
+      !mongoose.isObjectIdOrHexString(decoded.sub)
+    ) {
+      return next(new Error("Invalid authentication token."));
+    }
+
+    socket.data.userId = decoded.sub;
+    socket.data.tokenExpiresAt = decoded.exp * 1000;
+
+    next();
+  } catch (error) {
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError" ||
+      error.name === "NotBeforeError"
+    ) {
+      return next(new Error("Invalid or expired authentication token."));
+    }
+
+    next(error);
+  }
+});
+
+io.on("connection", (socket) => {
+  socket.join(`user:${socket.data.userId}`);
+
+  const millisecondsUntilExpiration =
+    socket.data.tokenExpiresAt - Date.now();
+
+
+  if (millisecondsUntilExpiration <= 0) {
+    socket.disconnect(true);
+    return;
+  }
+
+  const expirationTimer = setTimeout(() => {
+    socket.disconnect(true);
+  }, millisecondsUntilExpiration);
+
+  socket.on("conversation:join", async (conversationId, acknowledge) => {
+    const reply =
+      typeof acknowledge === "function" ? acknowledge : () => {};
+
+    if (!mongoose.isObjectIdOrHexString(conversationId)) {
+      return reply({
+        ok: false,
+        error: "Invalid conversation ID."
+      });
+    }
+
+    try {
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        members: socket.data.userId
+      });
+
+      if (!conversation) {
+        return reply({
+          ok: false,
+          error: "Conversation not found."
+        });
+      }
+
+      const room = `conversation:${conversation._id.toString()}`;
+
+      await socket.join(room);
+
+      return reply({
+        ok: true,
+        conversationId: conversation._id.toString()
+      });
+    } catch (error) {
+      console.error("Socket conversation join failed:", error);
+
+      return reply({
+        ok: false,
+        error: "Unable to join conversation."
+      });
+    }
+  });
+
+  socket.on("message:send", async (payload, acknowledge) => {
+     const reply =
+       typeof acknowledge === "function" ? acknowledge : () => {};
+
+     try {
+       const result = await createMessage(
+         payload?.conversationId,
+         socket.data.userId,
+         payload?.content
+       );
+
+       if (!result.ok) {
+         return reply(result);
+       }
+
+       reply({
+         ok: true,
+         message: result.message
+       });
+
+       io.to(`conversation:${result.message.conversation}`).emit(
+         "message:new",
+         result.message
+       );
+     } catch (error) {
+       console.error("Socket message creation failed:", error);
+
+       reply({
+         ok: false,
+         code: "server_error"
+       });
+     }
+   });
+
+  socket.on("conversation:leave", async (conversationId, acknowledge) => {
+      const reply =
+        typeof acknowledge === "function" ? acknowledge : () => {};
+
+      if (
+        typeof conversationId !== "string" ||
+        !mongoose.isObjectIdOrHexString(conversationId)
+      ) {
+        return reply({
+          ok: false,
+          error: "Invalid conversation ID."
+        });
+      }
+
+      try {
+        await socket.leave(`conversation:${conversationId}`);
+
+        return reply({
+          ok: true
+        });
+      } catch (error) {
+        console.error("Socket conversation leave failed:", error);
+
+        return reply({
+          ok: false,
+          error: "Unable to leave conversation."
+        });
+      }
+    });
+
+  socket.on("disconnect", () => {
+    clearTimeout(expirationTimer);
+  });
+});
+
 const mongoose = require("mongoose");
 const User = require("./models/User");
 const Conversation = require("./models/Conversation");
 const validateRegistration = require("./utils/validateRegistration");
 const { hashPassword, verifyPassword } = require("./utils/password");
-const { createToken } = require("./utils/token");
+const { createToken, verifyToken } = require("./utils/token");
 const requireAuth = require("./middleware/auth");
-const app = express();
 const PORT = process.env.PORT;
 const MONGO_URI = process.env.MONGO_URI;
 const Message = require("./models/Message");
 const validateConversation = require("./utils/validateConversation");
 const validateMessage = require("./utils/validateMessage");
+const createMessage = require("./services/createMessage");
+
 
 app.use(express.json());
 
@@ -474,6 +642,11 @@ app.delete(
         });
       }
 
+      const userRoom = `user:${userId}`;
+      const conversationRoom = `conversation:${conversationId}`;
+
+      io.in(userRoom).socketsLeave(conversationRoom);
+
       return res.status(200).json({
         message: "Group member removed successfully.",
         conversation: {
@@ -499,49 +672,40 @@ app.post(
   requireDatabase,
   requireAuth,
   async (req, res) => {
-    const { conversationId } = req.params;
-    const { content } = req.body || {};
+    try {
+      const result = await createMessage(
+        req.params.conversationId,
+        req.userId,
+        req.body?.content
+      );
 
-    if (!mongoose.isObjectIdOrHexString(conversationId)) {
-      return res.status(400).json({
-        error: "Invalid conversation ID."
-      });
-    }
-
-    const validationError = validateMessage(content);
-
-        if (validationError) {
+      if (!result.ok) {
+        if (result.code === "invalid_conversation") {
           return res.status(400).json({
-            error: validationError
+            error: "Invalid conversation ID."
           });
         }
 
-    try {
-      const conversation = await Conversation.findOne({
-        _id: conversationId,
-        members: req.userId
-      });
+        if (result.code === "invalid_content") {
+          return res.status(400).json({
+            error: result.error
+          });
+        }
 
-      if (!conversation) {
-        return res.status(404).json({
-          error: "Conversation not found."
-        });
+        if (result.code === "not_found") {
+          return res.status(404).json({
+            error: "Conversation not found."
+          });
+        }
       }
 
-      const message = await Message.create({
-        conversation: conversation._id,
-        sender: req.userId,
-        content: content.trim()
-      });
+      io.to(`conversation:${result.message.conversation}`).emit(
+        "message:new",
+        result.message
+      );
 
       return res.status(201).json({
-        message: {
-          id: message._id.toString(),
-          conversation: message.conversation.toString(),
-          sender: message.sender.toString(),
-          content: message.content,
-          createdAt: message.createdAt
-        }
+        message: result.message
       });
     } catch (error) {
       console.error("Message creation failed:", error);
@@ -821,8 +985,8 @@ async function startServer() {
     await User.init();
     console.log("User indexes initialized");
 
-    app.listen(PORT, () => {
-      console.log(`Messenger server running on port ${PORT}`);
+    httpServer.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
     });
 
   } catch (error) {

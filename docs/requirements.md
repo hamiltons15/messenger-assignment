@@ -978,8 +978,7 @@ Account passwords must contain at least 6 characters and must not exceed 72 byte
 
 The backend will enforce these password validation rules during registration and securely hash accepted passwords using bcrypt before storing them.
 
-The Messenger system will issue JWTs with an expiration period of one hour. The backend will reject expired tokens when users attempt to access protected operations. Users whose authentication tokens expire will be required to log in again to obtain a new token.
-
+The Messenger system will issue JWTs with an expiration period of eight hours. The backend will reject expired tokens when users attempt to access protected operations. Users whose authentication tokens expire will be required to log in again to obtain a new token. Socket.IO connections will also enforce token expiration so that an authenticated connection cannot continue receiving protected conversation events after its JWT expires.
 
 **Remaining Open Questions:**
 
