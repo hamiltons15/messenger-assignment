@@ -60,10 +60,43 @@ const conversationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true
+    },
+    directKey: {
+      type: String,
+      default: undefined,
+      validate: {
+        validator: function (value) {
+          if (this.type === "direct") {
+            if (!Array.isArray(this.members) || this.members.length !== 2) {
+              return false;
+            }
+
+            const expectedKey = this.members
+              .map((member) => member.toString())
+              .sort()
+              .join(":");
+
+            return value === expectedKey;
+          }
+
+          return value === undefined;
+        },
+        message: "Direct conversations require a canonical pair key; groups must not have one."
+      }
     }
   },
   {
     timestamps: true
+  }
+);
+
+conversationSchema.index(
+  { directKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      directKey: { $type: "string" }
+    }
   }
 );
 

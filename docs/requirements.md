@@ -336,7 +336,7 @@ The system shall not require deployment to an externally hosted production envir
 
 2. An authorized group member can send a message to the group conversation.
 
-3. The system stores each group message with the correct conversation identifier, authenticated sender, and message content.
+3. When a direct conversation already exists between the same two participants, the system shall reject attempts to create a duplicate conversation with an HTTP 409 Conflict response. Authorized participants shall still be able to retrieve and access the existing conversation through the application's conversation listing functionality.
 
 4. Other authorized group members can retrieve and view messages sent within the group conversation.
 
@@ -722,32 +722,30 @@ External notification services, email notifications, and operating system push n
 
 #### UQ-03 - Group Membership Permissions
 
-**Status:** Partially Resolved
+**Status:** Resolved
 
 **Question:** Which users will have permission to add or remove members from a group conversation, and what restrictions will apply to those operations?
 
 **Established Decisions:**
 
-The Messenger system will allow authenticated users to create group conversations and support the addition and removal of registered group members.
+The Messenger system will allow authenticated users to create group conversations containing at least three distinct registered users. The authenticated user creating the group must be included in its initial membership.
 
-The system will enforce group membership permissions on the backend and reject membership changes attempted by users without the required authorization.
+Only the group creator will be authorized to add or remove group members. Other group members will be able to participate in authorized messaging operations but will not be permitted to modify group membership.
 
-Group membership information will be stored persistently in MongoDB. When membership changes occur, the system will update access permissions so that removed members cannot continue accessing protected group operations or receiving protected group events.
+The group creator cannot be removed from the group in the initial implementation. Group membership changes must preserve a minimum of three distinct registered members.
 
-Group conversations will initially require at least three distinct registered users. The authenticated user creating the group must be included in its membership, and the backend will reject requests containing duplicate members, invalid user identifiers, or nonexistent accounts. Group creation will use the authenticated user's verified JWT identity rather than accepting a creator identity supplied by the browser. The initial group membership and creator information will be stored persistently in MongoDB.
+The backend will reject attempts to add an existing member, remove a user who is not a member, add a nonexistent user, or perform a membership operation using an invalid user identifier. Unauthorized membership changes will also be rejected.
 
-**Remaining Open Questions:**
+The backend will determine the acting user's identity from a verified JWT and will enforce membership management permissions using the conversation's persisted `createdBy` and `members` information.
 
-1. Will only the group creator be permitted to add or remove members, or will all group members have these permissions?
+Group membership changes will be stored persistently in MongoDB. Removed members will immediately lose authorization to access the group's protected operations, message history, and real-time events. Newly added or readded members will receive access to the group's entire stored message history, consistent with UQ-04.
 
-2. Can the group creator be removed from the group, and if so, under what conditions?
-
-3. Are any additional restrictions needed to prevent invalid membership changes, such as adding a user who is already a member?
+The system will not support transferring group ownership or removing the group creator in the initial implementation.
 
 
 #### UQ-04 - Group Membership and Message History Behavior
 
-**Status:** Unresolved
+**Status:** Resolved
 
 **Question:** How will the Messenger system determine access to historical group messages when users are added to or removed from a group conversation?
 
@@ -761,15 +759,14 @@ When a user is removed from a group, the system will prevent that user from perf
 
 The system will preserve stored group messages according to the established message persistence requirements.
 
-**Remaining Open Questions:**
+The Messenger system will use current group membership to determine access to stored group message history. Authenticated users who are current members of a group conversation will be permitted to retrieve the entire stored message history, including messages sent before they joined the group.
 
-1. When a user is added to an existing group, will they be permitted to view messages sent before they joined, or only messages sent after their membership began?
+When a user is removed from a group conversation, they will immediately lose access to the group's stored message history and protected messaging operations. Messages will remain stored in MongoDB and accessible to the remaining authorized members.
 
-2. When a user is removed from a group, will they lose access to the entire conversation history, including messages they previously received?
+If a previously removed user is added back to the group, they will regain access to the entire stored message history. The system will not require membership start and end timestamps to enforce these history access rules.
 
-3. If a user is removed and later added back to the same group, which historical messages will become available to them?
+The backend will enforce these restrictions using the authenticated user's verified JWT identity and the group's current membership information stored in MongoDB.
 
-4. Will the system need to record membership start and end times to enforce the selected history access rules?
 
 **Related Requirements:** FR-03, FR-04, FR-05, FR-09, AC-03, AC-04, AC-05, AC-09
 
@@ -916,7 +913,7 @@ The system will persist new messages before broadcasting successful delivery eve
 
 #### UQ-09 - Message Delivery Behavior
 
-**Status:** Partially Resolved
+**Status:** Resolved
 
 **Question:** How will the Messenger system handle real-time message delivery, offline message recovery, delivery status information, and message timestamps?
 
@@ -932,17 +929,25 @@ Users who are offline when messages are sent will be able to retrieve those mess
 
 The application will provide appropriate feedback when message submission fails and will not incorrectly indicate that an unsuccessful operation was completed.
 
-**Remaining Open Questions:**
+The backend will assign a creation timestamp (`createdAt`) to each message when it is persisted in MongoDB. Message history will be retrieved in descending order by creation timestamp, with the MongoDB message identifier (`_id`) used as a secondary descending sort key to ensure deterministic ordering when timestamps are equal. The system will use cursor-based pagination to retrieve older messages. Client-provided timestamps will not determine the ordering of stored messages.
 
-1. Will messages display a delivery status, such as sent, delivered, or read?
+Messenger will display the backend-assigned creation timestamp for each message in the user interface. Message timestamps will be stored in UTC and converted to the user's local time zone by the frontend for display. Messages created on the user's current local calendar date will display the time in a 12-hour format with AM or PM (for example, 2:35 PM). Older messages will display an abbreviated month, day, year, and time (for example, Oct 27, 2026, 2:35 PM). These display formats will not affect message ordering, which will continue to use the backend-assigned creation timestamp and message identifier.
 
-2. Will messages display timestamps, and if so, what timestamp format will be used?
+Messenger will use three client side message states: Sending, Sent, and Failed. A message will be considered Sending while the client is waiting for confirmation from the backend. A message will be considered Sent only after the backend confirms that it has been successfully persisted in MongoDB. A message will be considered Failed if the message submission fails or the backend rejects the request.
 
-3. Will Messenger distinguish between a message successfully stored by the backend and a message received by another user's connected client?
+The system will not implement separate Delivered or Read statuses in the initial Messenger implementation. Successfully storing a message does not guarantee that another user's connected client has received or viewed it. Real time delivery will occur only after successful persistence, and users who were offline will be able to retrieve stored messages through conversation history when they reconnect.
 
-4. How will the interface communicate temporary connection interruptions or delays in real-time delivery?
+Messenger will provide a visible connection status indicator when the client loses its real-time connection to the backend. During an interruption, the interface will display a message indicating that the connection has been lost and that reconnection is being attempted. Once the connection is restored, the warning will be removed, and the client will retrieve conversation history to recover messages that may have been missed while disconnected.
 
-5. Will users receive any indication that messages were received while they were offline?
+If the backend rejects a message submission or the submission fails, the interface will indicate that the message was not successfully confirmed. If a connection interruption prevents the client from determining whether a message was persisted, Messenger will not automatically resend the message. Instead, the user will be able to check the conversation history before attempting to send it again, reducing the risk of duplicate messages.
+
+Connection interruptions will not change the established definition of the Sent state, which requires confirmation of successful backend persistence. The interface will not claim that another user's client received a message solely because the backend stored it.
+
+Messenger will provide in-app unread message indicators for conversations containing messages that the authenticated user has not yet viewed. When a user reconnects or logs back into Messenger, the system will retrieve stored conversation messages and identify messages that remain unread.
+
+The conversation list will display an unread message count for each conversation containing unread messages. Opening a conversation and successfully loading its message history will clear that conversation's unread indicator. Messenger will maintain a per-user, per-conversation read position to track unread messages without exposing read receipts to other participants.
+
+Unread message indicators will be available within the Messenger application only. The initial implementation will not include external push notifications, email notifications, or visible read receipts. Unread message tracking will not change the established Sending, Sent, and Failed message states or the requirement that messages be persisted before real-time delivery.
 
 **Related Requirements:** FR-05, FR-07, FR-09, FR-11, NFR-03, NFR-04, AC-05, AC-07, AC-09, AC-11, AC-13
 
@@ -1007,11 +1012,13 @@ If an existing direct conversation is found, the current implementation will rej
 
 Direct conversations will be stored persistently in MongoDB.
 
+The HTTP 409 Conflict response will remain the established behavior when a duplicate direct conversation is requested. Authorized participants will be able to locate and access the existing conversation through the conversation listing functionality defined in FR-12.
+
+To prevent duplicate direct conversations during simultaneous creation requests, the backend will generate a canonical identifier from the two participants' user identifiers in a consistent order. MongoDB will enforce uniqueness through a unique index on this identifier. Attempts to create a duplicate direct conversation, including concurrent requests, will return HTTP 409 Conflict. The backend will continue to verify the authenticated user's identity and conversation membership before creating a conversation.
+
 **Remaining Open Questions:**
 
-1. Should the API return an existing direct conversation instead of responding with a conflict when the same users request another conversation?
-
-2. How should Messenger prevent duplicate direct conversations when simultaneous creation requests occur?
+1. How should Messenger prevent duplicate direct conversations when simultaneous creation requests occur?
 
 **Related Requirements:** FR-02, FR-09, FR-10, AC-02, AC-09, AC-10
 

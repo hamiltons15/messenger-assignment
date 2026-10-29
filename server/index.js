@@ -16,6 +16,8 @@ const app = express();
 const PORT = process.env.PORT;
 const MONGO_URI = process.env.MONGO_URI;
 
+const Message = require("./models/Message");
+
 app.use(express.json());
 
 app.get("/health", (req, res) => {
@@ -166,6 +168,33 @@ app.get("/api/auth/me", requireDatabase, requireAuth, async (req, res) => {
   }
 });
 
+app.get("/api/conversations", requireDatabase, requireAuth, async (req, res) => {
+  try {
+    const conversations = await Conversation.find({
+      members: req.userId
+    })
+      .sort({ createdAt: -1, _id: -1 })
+      .lean();
+
+    return res.status(200).json({
+      conversations: conversations.map((conversation) => ({
+        id: conversation._id.toString(),
+        type: conversation.type,
+        name: conversation.name || null,
+        members: conversation.members.map((member) => member.toString()),
+        createdBy: conversation.createdBy.toString(),
+        createdAt: conversation.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error("Conversation listing failed:", error);
+
+    return res.status(500).json({
+      error: "Unable to retrieve conversations."
+    });
+  }
+});
+
 app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) => {
   const { type, members } = req.body || {};
 
@@ -227,23 +256,28 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
         });
       }
 
-    if (type === "direct") {
-        const existingConversation = await Conversation.findOne({
-          type: "direct",
-          members: { $all: members, $size: 2 }
-        });
+    const directKey = type === "direct"
+      ? members.map(member => member.toLowerCase()).sort().join(":")
+      : undefined;
 
-        if (existingConversation) {
-          return res.status(409).json({
-            error: "A direct conversation already exists between these users."
-          });
-        }
+    if (type === "direct") {
+      const existingConversation = await Conversation.findOne({
+        type: "direct",
+        directKey
+      });
+
+      if (existingConversation) {
+        return res.status(409).json({
+          error: "A direct conversation already exists between these users."
+        });
       }
+    }
 
     const conversation = await Conversation.create({
       type,
       members,
-      createdBy: req.userId
+      createdBy: req.userId,
+      ...(type == "direct" ? { directKey } : {})
     });
 
     return res.status(201).json({
@@ -257,6 +291,16 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
     });
 
   } catch (error) {
+    if (
+      type === "direct" &&
+      error.code === 11000 &&
+      (error.keyPattern?.directKey || error.keyValue?.directKey)
+    ) {
+      return res.status(409).json({
+        error: "A direct conversation already exists between these users."
+      });
+    }
+
     console.error("Conversation creation failed:", error);
 
     return res.status(500).json({
@@ -265,6 +309,510 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
   }
 
 });
+
+app.post(
+  "/api/conversations/:conversationId/members",
+  requireDatabase,
+  requireAuth,
+  async (req, res) => {
+    const { conversationId } = req.params;
+    const { userId } = req.body || {};
+
+    if (!mongoose.isObjectIdOrHexString(conversationId)) {
+      return res.status(400).json({
+        error: "Invalid conversation ID."
+      });
+    }
+
+    if (
+      typeof userId !== "string" ||
+      !mongoose.isObjectIdOrHexString(userId)
+    ) {
+      return res.status(400).json({
+        error: "Invalid user ID."
+      });
+    }
+
+    try {
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        type: "group"
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: "Group conversation not found."
+        });
+      }
+
+      if (conversation.createdBy.toString() !== req.userId) {
+        return res.status(403).json({
+          error: "Only the group creator can manage members."
+        });
+      }
+
+      const userExists = await User.exists({ _id: userId });
+
+      if (!userExists) {
+        return res.status(400).json({
+          error: "User does not exist."
+        });
+      }
+
+      const updated = await Conversation.findOneAndUpdate(
+        {
+          _id: conversationId,
+          type: "group",
+          createdBy: req.userId,
+          members: { $ne: userId }
+        },
+        {
+          $addToSet: { members: userId }
+        },
+        {
+          returnDocument: "after",
+          runValidators: true
+        }
+      );
+
+      if (!updated) {
+        return res.status(409).json({
+          error: "User is already a group member."
+        });
+      }
+
+      return res.status(200).json({
+        message: "Group member added successfully.",
+        conversation: {
+          id: updated._id.toString(),
+          type: updated.type,
+          members: updated.members.map(id => id.toString()),
+          createdBy: updated.createdBy.toString()
+        }
+      });
+    } catch (error) {
+      console.error("Adding group member failed:", error);
+
+      return res.status(500).json({
+        error: "Unable to add group member."
+      });
+    }
+  }
+);
+
+app.delete(
+  "/api/conversations/:conversationId/members/:userId",
+  requireDatabase,
+  requireAuth,
+  async (req, res) => {
+    const { conversationId, userId } = req.params;
+
+    if (
+      !mongoose.isObjectIdOrHexString(conversationId) ||
+      !mongoose.isObjectIdOrHexString(userId)
+    ) {
+      return res.status(400).json({
+        error: "Invalid conversation or user ID."
+      });
+    }
+
+    try {
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        type: "group"
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: "Group conversation not found."
+        });
+      }
+
+      if (conversation.createdBy.toString() !== req.userId) {
+        return res.status(403).json({
+          error: "Only the group creator can manage members."
+        });
+      }
+
+      if (conversation.createdBy.toString() === userId) {
+        return res.status(403).json({
+          error: "The group creator cannot be removed."
+        });
+      }
+
+      if (
+        !conversation.members.some(
+          member => member.toString() === userId
+        )
+      ) {
+        return res.status(404).json({
+          error: "User is not a group member."
+        });
+      }
+
+      const updated = await Conversation.findOneAndUpdate(
+        {
+          _id: conversationId,
+          type: "group",
+          createdBy: req.userId,
+          members: userId,
+          $expr: {
+            $gt: [{ $size: "$members" }, 3]
+          }
+        },
+        {
+          $pull: { members: userId }
+        },
+        {
+          returnDocument: "after",
+          runValidators: true
+        }
+      );
+
+      if (!updated) {
+        return res.status(409).json({
+          error: "Group must retain at least 3 members."
+        });
+      }
+
+      return res.status(200).json({
+        message: "Group member removed successfully.",
+        conversation: {
+          id: updated._id.toString(),
+          type: updated.type,
+          members: updated.members.map(id => id.toString()),
+          createdBy: updated.createdBy.toString()
+        }
+      });
+    } catch (error) {
+      console.error("Removing group member failed:", error);
+
+      return res.status(500).json({
+        error: "Unable to remove group member."
+      });
+    }
+  }
+);
+
+
+app.post(
+  "/api/conversations/:conversationId/messages",
+  requireDatabase,
+  requireAuth,
+  async (req, res) => {
+    const { conversationId } = req.params;
+    const { content } = req.body || {};
+
+    if (!mongoose.isObjectIdOrHexString(conversationId)) {
+      return res.status(400).json({
+        error: "Invalid conversation ID."
+      });
+    }
+
+    if (
+      typeof content !== "string" ||
+      !content.trim() ||
+      content.trim().length > 2000
+    ) {
+      return res.status(400).json({
+        error: "Message content must contain 1 to 2000 characters."
+      });
+    }
+
+    try {
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        members: req.userId
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: "Conversation not found."
+        });
+      }
+
+      const message = await Message.create({
+        conversation: conversation._id,
+        sender: req.userId,
+        content: content.trim()
+      });
+
+      return res.status(201).json({
+        message: {
+          id: message._id.toString(),
+          conversation: message.conversation.toString(),
+          sender: message.sender.toString(),
+          content: message.content,
+          createdAt: message.createdAt
+        }
+      });
+    } catch (error) {
+      console.error("Message creation failed:", error);
+
+      return res.status(500).json({
+        error: "Unable to send message."
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/conversations/:conversationId/messages",
+  requireDatabase,
+  requireAuth,
+  async (req, res) => {
+    const { conversationId } = req.params;
+    const { before } = req.query;
+
+    if (!mongoose.isObjectIdOrHexString(conversationId)) {
+      return res.status(400).json({
+        error: "Invalid conversation ID."
+      });
+    }
+
+    if (
+      before !== undefined &&
+      (
+        typeof before !== "string" ||
+        !mongoose.isObjectIdOrHexString(before)
+      )
+    ) {
+      return res.status(400).json({
+        error: "Invalid history cursor."
+      });
+    }
+
+    try {
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        members: req.userId
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: "Conversation not found."
+        });
+      }
+
+      const filter = {
+        conversation: conversation._id
+      };
+
+      if (before) {
+        const cursorMessage = await Message.findOne({
+          _id: before,
+          conversation: conversation._id
+        }).select("createdAt");
+
+        if (!cursorMessage) {
+          return res.status(400).json({
+            error: "Invalid history cursor."
+          });
+        }
+
+        filter.$or = [
+          {
+            createdAt: { $lt: cursorMessage.createdAt }
+          },
+          {
+            createdAt: cursorMessage.createdAt,
+            _id: { $lt: cursorMessage._id }
+          }
+        ];
+      }
+
+      const messages = await Message.find(filter)
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(6)
+        .lean();
+
+      const hasMore = messages.length > 5;
+      const page = messages.slice(0, 5);
+
+      return res.status(200).json({
+        messages: page.map((message) => ({
+          id: message._id.toString(),
+          conversation: message.conversation.toString(),
+          sender: message.sender.toString(),
+          content: message.deletedAt
+            ? "This message was deleted."
+            : message.content,
+          createdAt: message.createdAt,
+          editedAt: message.editedAt || null,
+          deletedAt: message.deletedAt || null
+        })),
+        nextCursor: hasMore
+          ? page[page.length - 1]._id.toString()
+          : null
+      });
+    } catch (error) {
+      console.error("Message history retrieval failed:", error);
+
+      return res.status(500).json({
+        error: "Unable to retrieve message history."
+      });
+    }
+  }
+);
+
+app.patch(
+  "/api/conversations/:conversationId/messages/:messageId",
+  requireDatabase,
+  requireAuth,
+  async (req, res) => {
+    const { conversationId, messageId } = req.params;
+    const { content } = req.body || {};
+
+    if (
+      !mongoose.isObjectIdOrHexString(conversationId) ||
+      !mongoose.isObjectIdOrHexString(messageId)
+    ) {
+      return res.status(400).json({
+        error: "Invalid conversation or message ID."
+      });
+    }
+
+    if (
+      typeof content !== "string" ||
+      content.trim().length < 1 ||
+      content.trim().length > 2000
+    ) {
+      return res.status(400).json({
+        error: "Message content must contain 1 to 2000 characters."
+      });
+    }
+
+    try {
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        members: req.userId
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: "Conversation not found."
+        });
+      }
+
+      const message = await Message.findOneAndUpdate(
+        {
+          _id: messageId,
+          conversation: conversation._id,
+          sender: req.userId,
+          deletedAt: null
+        },
+        {
+          $set: {
+            content: content.trim(),
+            editedAt: new Date()
+          }
+        },
+        {
+          returnDocument: "after",
+          runValidators: true
+        }
+      );
+
+      if (!message) {
+        return res.status(404).json({
+          error: "Message not found or cannot be edited."
+        });
+      }
+
+      return res.status(200).json({
+        message: {
+          id: message._id.toString(),
+          conversation: message.conversation.toString(),
+          sender: message.sender.toString(),
+          content: message.content,
+          createdAt: message.createdAt,
+          editedAt: message.editedAt,
+          deletedAt: message.deletedAt
+        }
+      });
+    } catch (error) {
+      console.error("Message editing failed:", error);
+
+      return res.status(500).json({
+        error: "Unable to edit message."
+      });
+    }
+  }
+);
+
+app.delete(
+  "/api/conversations/:conversationId/messages/:messageId",
+  requireDatabase,
+  requireAuth,
+  async (req, res) => {
+    const { conversationId, messageId } = req.params;
+
+    if (
+      !mongoose.isObjectIdOrHexString(conversationId) ||
+      !mongoose.isObjectIdOrHexString(messageId)
+    ) {
+      return res.status(400).json({
+        error: "Invalid conversation or message ID."
+      });
+    }
+
+    try {
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        members: req.userId
+      });
+
+      if (!conversation) {
+        return res.status(404).json({
+          error: "Conversation not found."
+        });
+      }
+
+      const message = await Message.findOneAndUpdate(
+        {
+          _id: messageId,
+          conversation: conversation._id,
+          sender: req.userId,
+          deletedAt: null
+        },
+        {
+          $set: {
+            content: "This message was deleted.",
+            deletedAt: new Date()
+          }
+        },
+        {
+          new: true,
+          runValidators: true
+        }
+      );
+
+      if (!message) {
+        return res.status(404).json({
+          error: "Message not found or already deleted."
+        });
+      }
+
+      return res.status(200).json({
+        message: {
+          id: message._id.toString(),
+          conversation: message.conversation.toString(),
+          sender: message.sender.toString(),
+          content: message.content,
+          createdAt: message.createdAt,
+          editedAt: message.editedAt,
+          deletedAt: message.deletedAt
+        }
+      });
+    } catch (error) {
+      console.error("Message deletion failed:", error);
+
+      return res.status(500).json({
+        error: "Unable to delete message."
+      });
+    }
+  }
+);
 
 async function startServer() {
   try {
