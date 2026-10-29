@@ -1,6 +1,6 @@
 const jwt = require("jsonwebtoken");
 
-const TOKEN_EXPIRATION = "1h";
+const TOKEN_EXPIRATION = "8h";
 const TOKEN_ISSUER = "messenger-api";
 const TOKEN_AUDIENCE = "messenger-client";
 

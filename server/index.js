@@ -2,21 +2,18 @@ require("dotenv").config();
 
 const express = require("express");
 const mongoose = require("mongoose");
-
 const User = require("./models/User");
 const Conversation = require("./models/Conversation");
-
 const validateRegistration = require("./utils/validateRegistration");
 const { hashPassword, verifyPassword } = require("./utils/password");
 const { createToken } = require("./utils/token");
-
 const requireAuth = require("./middleware/auth");
-
 const app = express();
 const PORT = process.env.PORT;
 const MONGO_URI = process.env.MONGO_URI;
-
 const Message = require("./models/Message");
+const validateConversation = require("./utils/validateConversation");
+const validateMessage = require("./utils/validateMessage");
 
 app.use(express.json());
 
@@ -198,11 +195,13 @@ app.get("/api/conversations", requireDatabase, requireAuth, async (req, res) => 
 app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) => {
   const { type, members } = req.body || {};
 
-  if (type !== "direct" && type !== "group") {
-    return res.status(400).json({
-      error: "Conversation type must be direct or group."
-    });
-  }
+  const validationError = validateConversation(type, members);
+
+   if (validationError) {
+     return res.status(400).json({
+       error: validationError
+     });
+   }
 
   if (!Array.isArray(members) || members.length === 0) {
     return res.status(400).json({
@@ -509,15 +508,13 @@ app.post(
       });
     }
 
-    if (
-      typeof content !== "string" ||
-      !content.trim() ||
-      content.trim().length > 2000
-    ) {
-      return res.status(400).json({
-        error: "Message content must contain 1 to 2000 characters."
-      });
-    }
+    const validationError = validateMessage(content);
+
+        if (validationError) {
+          return res.status(400).json({
+            error: validationError
+          });
+        }
 
     try {
       const conversation = await Conversation.findOne({
@@ -672,15 +669,13 @@ app.patch(
       });
     }
 
-    if (
-      typeof content !== "string" ||
-      content.trim().length < 1 ||
-      content.trim().length > 2000
-    ) {
-      return res.status(400).json({
-        error: "Message content must contain 1 to 2000 characters."
-      });
-    }
+    const validationError = validateMessage(content);
+
+       if (validationError) {
+         return res.status(400).json({
+           error: validationError
+         });
+       }
 
     try {
       const conversation = await Conversation.findOne({

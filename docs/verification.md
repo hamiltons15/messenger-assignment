@@ -232,3 +232,57 @@ Canonical key: `6ae27fc7ab1f7f38bdfab020:6ae346550c9ad2815eb79e80`
 The backend successfully prevented duplicate direct conversations regardless of member order. Concurrent creation requests produced one successful conversation and one conflict response. The database query confirmed that only one matching conversation was stored.
 
 UQ-11's tested direct conversation uniqueness behavior passed verification.
+
+### History Cursor Authorization Verification
+
+**Date:** October 29, 2026
+
+**Reference:** Tech Primer 6 (Ch04f), Slide 62
+
+| Test | Expected | Actual | Status |
+|---|---|---|---|
+| Malformed history cursor | HTTP 400 | HTTP 400 | PASS |
+| Cursor from another conversation | HTTP 400 | HTTP 400 | PASS |
+| Nonmember supplies a history cursor | HTTP 404 | HTTP 404 | PASS |
+
+**Conclusion:** The backend rejected malformed and cross-conversation cursors. It also enforced conversation membership before allowing an unauthorized user to retrieve history.
+
+### Automated Input Validation and API Regression Verification
+
+**Reference:** Tech Primer 6 (Ch04f), Slides 24–26 and 65
+
+**Implementation:**
+
+- Added `utils/validateConversation.js` to validate conversation types, member arrays, member IDs, member counts, and duplicate members.
+- Updated the conversation creation endpoint to use the shared validation utility.
+- Added `utils/validateMessage.js` to validate message content.
+- Updated the message creation and editing endpoints to use the shared message validation utility.
+- Added automated conversation and message validation tests using Node.js's built-in test runner.
+- Preserved existing authentication, authorization, and database operations.
+
+**Automated Test Results:**
+
+Command: `node --test tests/*.test.js`
+
+| Test Category | Passed | Failed | Status |
+|---|---|---|---|
+| Authentication and JWT | 9 | 0 | PASS |
+| Conversation input validation | 8 | 0 | PASS |
+| Message input validation | 8 | 0 | PASS |
+| **Total** | **25** | **0** | **PASS** |
+
+**API Regression Verification:**
+
+| Test | Expected Result | Actual Result | Status |
+|---|---|---|---|
+| Create conversation with invalid type | HTTP 400 | HTTP 400 | PASS |
+| Create message with whitespace-only content | HTTP 400 | HTTP 400 | PASS |
+| Edit message with whitespace-only content | HTTP 400 | HTTP 400 | PASS |
+
+All three API regression tests returned the expected validation error messages.
+
+**Conclusion:**
+
+All 25 automated tests passed successfully. The conversation and message validation utilities correctly handled the tested valid and invalid inputs. The Express API regression tests confirmed that the refactored endpoints continued rejecting invalid input with the expected HTTP responses. Existing authentication and JWT tests also continued passing.
+
+These results verify the tested input validation behavior. They do not replace the separate membership, persistence, pagination, and authorization tests documented in earlier sections.
