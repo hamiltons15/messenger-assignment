@@ -2,6 +2,34 @@ import { useEffect, useRef, useState } from 'react'
 import { io } from 'socket.io-client'
 import './App.css'
 
+function mergeMessages(currentMessages, incomingMessages) {
+  const messagesById = new Map()
+
+  for (const message of currentMessages) {
+    messagesById.set(message.id, message)
+  }
+
+  for (const message of incomingMessages) {
+    if (!messagesById.has(message.id)) {
+      messagesById.set(message.id, message)
+    }
+  }
+
+  return [...messagesById.values()].sort((a, b) => {
+    const timeDifference =
+      new Date(b.createdAt).getTime() -
+      new Date(a.createdAt).getTime()
+
+    if (timeDifference !== 0) {
+      return timeDifference
+    }
+
+    if (a.id === b.id) return 0
+
+    return a.id > b.id ? -1 : 1
+  })
+}
+
 function App() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -91,6 +119,16 @@ function App() {
 
     let active = true
 
+    const recoveryControllers = new Set()
+
+    const cancelRecovery = () => {
+      for (const controller of recoveryControllers) {
+        controller.abort()
+      }
+
+      recoveryControllers.clear()
+    }
+
     const joinConversation = () => {
       socket.emit('conversation:join', selectedConversationId, (response) => {
         if (!active) return
@@ -104,8 +142,142 @@ function App() {
 
           if (reconnectPendingRef.current) {
             reconnectPendingRef.current = false
+
+            const controller = new AbortController()
+            recoveryControllers.add(controller)
+
+            const knownMessageIds = new Set(
+              messagesRef.current.map((message) => message.id)
+            )
+
+            const newestKnownMessage = messagesRef.current.reduce(
+              (newest, message) => {
+                if (!newest) return message
+
+                const messageTime = new Date(message.createdAt).getTime()
+                const newestTime = new Date(newest.createdAt).getTime()
+
+                if (messageTime > newestTime) return message
+
+                if (
+                  messageTime === newestTime &&
+                  message.id > newest.id
+                ) {
+                  return message
+                }
+
+                return newest
+              },
+              null
+            )
+
+            const recoverMessages = async () => {
+              let cursor = null
+              let pageCount = 0
+              let recoveredCount = 0
+              const recoveredMessages = []
+              const seenCursors = new Set()
+
+              try {
+                while (!controller.signal.aborted && active) {
+                  const query = cursor
+                    ? `?before=${encodeURIComponent(cursor)}`
+                    : ''
+
+                  const response = await fetch(
+                    `/api/conversations/${selectedConversationId}/messages${query}`,
+                    {
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                      },
+                      signal: controller.signal,
+                    }
+                  )
+
+                  const data = await response.json()
+
+                  if (!response.ok) {
+                    throw new Error(data.error || 'Unable to recover messages.')
+                  }
+
+                  if (
+                    !Array.isArray(data.messages) ||
+                    !(typeof data.nextCursor === 'string' || data.nextCursor === null)
+                  ) {
+                    throw new Error('Invalid message history response.')
+                  }
+
+                  if (controller.signal.aborted || !active) return
+
+                  pageCount += 1
+
+                  const isNewerThanBoundary = (message) => {
+                    if (!newestKnownMessage) return true
+
+                    const messageTime = new Date(message.createdAt).getTime()
+                    const boundaryTime = new Date(newestKnownMessage.createdAt).getTime()
+
+                    return (
+                      messageTime > boundaryTime ||
+                      (
+                        messageTime === boundaryTime &&
+                        message.id > newestKnownMessage.id
+                      )
+                    )
+                  }
+
+                  const reachedKnownMessage = data.messages.some(
+                    (message) => !isNewerThanBoundary(message)
+                  )
+
+                  const newMessages = data.messages.filter(
+                    (message) =>
+                      isNewerThanBoundary(message) &&
+                      !knownMessageIds.has(message.id)
+                  )
+
+                  recoveredMessages.push(...newMessages)
+                  recoveredCount += newMessages.length
+
+                  if (reachedKnownMessage || data.nextCursor === null) {
+                    break
+                  }
+
+                  if (
+                    data.messages.length === 0 ||
+                    seenCursors.has(data.nextCursor)
+                  ) {
+                    throw new Error('Recovery pagination did not advance.')
+                  }
+
+                  seenCursors.add(data.nextCursor)
+                  cursor = data.nextCursor
+                }
+
+                if (controller.signal.aborted || !active) return
+
+                if (recoveredMessages.length > 0) {
+                  setMessages((currentMessages) =>
+                    mergeMessages(currentMessages, recoveredMessages)
+                  )
+                }
+
+                console.info(
+                  `Recovery scanned ${pageCount} page(s) and found ${recoveredCount} messages not previously loaded.`
+                )
+              } catch (err) {
+                if (!controller.signal.aborted && active) {
+                  console.error('Message recovery failed:', err)
+                }
+              } finally {
+                recoveryControllers.delete(controller)
+              }
+            }
+
+            void recoverMessages()
+
             console.info(
-              'Authorized conversation rejoined; message recovery can begin.'
+              'Authorized conversation rejoined; recovery controller created.'
             )
           }
         }
@@ -113,6 +285,8 @@ function App() {
     }
 
     socket.on('connect', joinConversation)
+    socket.on('disconnect', cancelRecovery)
+
 
     if (socket.connected) {
       joinConversation()
@@ -120,7 +294,11 @@ function App() {
 
     return () => {
       active = false
+
+      cancelRecovery()
+
       socket.off('connect', joinConversation)
+      socket.off('disconnect', cancelRecovery)
 
       if (socket.connected) {
         socket.emit('conversation:leave', selectedConversationId)
@@ -148,7 +326,7 @@ function App() {
           return currentMessages
         }
 
-        return [message, ...currentMessages]
+        return mergeMessages(currentMessages, [message])
       })
     }
 
@@ -230,17 +408,9 @@ function App() {
         }
 
         if (!controller.signal.aborted) {
-          setMessages((currentMessages) => {
-            const historyIds = new Set(
-              data.messages.map((message) => message.id)
-            )
-
-            const additionalMessages = currentMessages.filter(
-              (message) => !historyIds.has(message.id)
-            )
-
-            return [...additionalMessages, ...data.messages]
-          })
+          setMessages((currentMessages) =>
+            mergeMessages(currentMessages, data.messages)
+          )
 
           setNextCursor(data.nextCursor ?? null)
         }
@@ -303,17 +473,9 @@ function App() {
 
       if (controller.signal.aborted) return
 
-      setMessages((currentMessages) => {
-        const existingIds = new Set(
-          currentMessages.map((message) => message.id)
-        )
-
-        const olderMessages = data.messages.filter(
-          (message) => !existingIds.has(message.id)
-        )
-
-        return [...currentMessages, ...olderMessages]
-      })
+      setMessages((currentMessages) =>
+        mergeMessages(currentMessages, data.messages)
+      )
 
       setNextCursor(data.nextCursor)
     } catch (err) {
