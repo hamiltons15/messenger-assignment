@@ -84,7 +84,7 @@ function App() {
     let hasConnectedBefore = false
 
     socket.on('connect', () => {
-      setSocketStatus('connected')
+      setSocketStatus('joining')
       setSocketError('')
 
       if (hasConnectedBefore) {
@@ -97,6 +97,21 @@ function App() {
 
     socket.on('connect_error', (err) => {
       setSocketStatus('disconnected')
+
+      const authenticationErrors = [
+        'Authentication required.',
+        'Invalid authentication token.',
+        'Invalid or expired authentication token.',
+      ]
+
+      if (authenticationErrors.includes(err.message)) {
+        setToken(null)
+        setUser(null)
+        setSocketError('')
+        setError('Session expired or rejected. Log in again.')
+        return
+      }
+
       setSocketError(err.message)
     })
 
@@ -135,14 +150,27 @@ function App() {
     }
 
     const joinConversation = () => {
-      socket.emit('conversation:join', selectedConversationId, (response) => {
-        if (!active) return
+      setSocketStatus('joining')
+
+        socket.timeout(5000).emit(
+          'conversation:join',
+          selectedConversationId,
+          (err, response) => {
+            if (!active) return
+
+            if (err) {
+              setSocketStatus('disconnected')
+              setSocketError('Conversation join timed out.')
+              return
+            }
 
         if (!response?.ok) {
+          setSocketStatus('denied')
           setSocketError(
             response?.error || 'Unable to join conversation.'
           )
         } else {
+          setSocketStatus('live')
           setSocketError('')
 
           if (reconnectPendingRef.current) {
@@ -273,8 +301,15 @@ function App() {
               } catch (err) {
                 if (!controller.signal.aborted && active) {
                   console.error('Message recovery failed:', err)
+
+                  setMessagesError(
+                    err instanceof Error
+                      ? `Message recovery failed: ${err.message}`
+                      : 'Message recovery failed.'
+                  )
                 }
               } finally {
+
                 recoveryControllers.delete(controller)
               }
             }
@@ -519,8 +554,8 @@ function App() {
       if (transport === 'socket') {
         const socket = socketRef.current
 
-        if (!socket?.connected) {
-          throw new Error('Socket.IO is not connected.')
+        if (!socket?.connected || socketStatus !== 'live') {
+          throw new Error('Socket.IO is not authorized for this conversation.')
         }
 
         const result = await socket

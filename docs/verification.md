@@ -565,6 +565,99 @@ The following commands were executed from the `client` directory:
 | Production build modules transformed | 46 |
 | Build or lint errors | None reported |
 
+### Additional TP8 Verification — Cursor Pagination
+
+The existing direct conversation was used to test message-history pagination with more than five persisted messages.
+
+**Test Conversation ID:** `6ae63ed9ce63225519631ae6`
+
+| Test | Result |
+|---|---|
+| Direct conversation contained 10 persisted messages | PASS |
+| Older messages displayed through the pagination interface | PASS |
+| Messages displayed in chronological order | PASS |
+| No visible duplicate messages | PASS |
+| Load Older button absent after the end of available history | PASS |
+
+The final browser screenshot showed all 10 messages, including the six additional messages labeled `m1` through `m6`. The exact HTTP cursor-request sequence was not independently captured.
+
+### Additional TP8 Verification — Offline Reconnection and Message Recovery
+
+User A and User B opened the existing direct conversation in independent Chrome sessions. User B's browser network connection was temporarily disabled using Chrome DevTools.
+
+While User B was offline, User A submitted two distinct messages using HTTP:
+
+- `distinct message 1`
+- `distinct message 2`
+
+User B's browser was then returned to an online state without refreshing the page or logging in again.
+
+| Test | Result |
+|---|---|
+| Network interruption simulated using Chrome DevTools | PASS |
+| Two messages submitted while User B was offline | PASS |
+| Socket.IO connection reestablished | PASS |
+| Authorized conversation room rejoined | PASS |
+| Both missed messages recovered automatically | PASS |
+| Recovered messages displayed once each | PASS |
+| Browser returned to live connection status | PASS |
+
+The browser console reported:
+
+```text
+Socket.IO reconnected; conversation recovery needed.
+Authorized conversation rejoined; recovery controller created.
+Recovery scanned 1 page(s) and found 2 messages not previously loaded.
+```
+
+This verifies automatic recovery for the tested transient-disconnection scenario without requiring a page refresh.
+
+### Additional TP8 Verification — Group Authorization and Conversation Switching
+
+A three-person group conversation was created through the authenticated conversation API.
+
+**Group Conversation ID:** `6ae656bece63225519631af2`
+
+**Members:**
+
+- `tp8_member_a`
+- `tp8_member_b`
+- `tp8_member_c`
+
+User C selected the authorized group conversation and submitted the following message using Socket.IO:
+
+`TP8 group message from C`
+
+| Test | Result |
+|---|---|
+| Group creation through authenticated API | PASS |
+| All three members included in group | PASS |
+| Group visible to authorized users | PASS |
+| User C submitted a group message using Socket.IO | PASS |
+| Group message visible to User B | PASS |
+| Group message visible to User A | PASS |
+| Switching to direct conversation excluded group message | PASS |
+| Switching back restored group message history | PASS |
+| User C's conversation list excluded the private A–B direct conversation | PASS |
+
+The browser screenshots showed that the group and direct conversation maintained separate message histories. The same group message was visible to authorized members without appearing in the unrelated direct conversation.
+
+### Additional TP8 Verification — Logout and Session Recovery
+
+User B logged out of the React frontend and subsequently logged back in.
+
+| Test | Result |
+|---|---|
+| Logout returned user to login screen | PASS |
+| Authenticated conversations no longer displayed after logout | PASS |
+| Previous message history no longer displayed after logout | PASS |
+| User B authenticated again successfully | PASS |
+| Authorized conversations retrieved after login | PASS |
+| Previously persisted group message retrieved | PASS |
+| Authorized Socket.IO conversation join returned to live status | PASS |
+
+The React implementation includes Socket.IO cleanup when the authenticated session ends. The screenshots verified the visible logout and recovery behavior, but the underlying socket disconnection was not independently inspected in DevTools.
+
 ### Known Limitations and Remaining Verification
 
 - A network failure or Socket.IO acknowledgement timeout does not guarantee that the server rejected the message. Automatic retries are not implemented because they could create duplicate persisted messages.
@@ -575,10 +668,10 @@ The following commands were executed from the `client` directory:
 
 ### TP8 Verification Conclusion
 
-The tested React frontend functionality passed authentication, authorized conversation listing, message history recovery, HTTP and Socket.IO message submission, bidirectional real-time delivery, visible message deduplication, and unauthorized conversation-access verification.
+The tested React frontend functionality passed authentication, authorized conversation listing, cursor-based message history, HTTP and Socket.IO message submission, bidirectional real-time delivery, visible message deduplication, and unauthorized conversation-access verification.
 
-Two independent browser sessions successfully exchanged messages using both submission transports. A third authenticated user was denied access to the private conversation through the conversation list, HTTP message-history endpoint, and Socket.IO room-join handler.
+Additional browser testing verified automatic recovery of two messages missed during a simulated network outage, pagination across 10 persisted messages, authorized three-person group messaging, direct-to-group conversation switching, message-history isolation, and logout followed by successful reauthentication and persisted-history retrieval.
 
-The frontend production build and ESLint checks also passed.
+The frontend production build and ESLint checks passed following the Socket.IO authentication, room-join status, timeout, and recovery-error handling changes.
 
-These results support completion of the tested TP8 frontend integration scenarios. Broader reconnection reliability, automated browser acceptance tests, and exactly-once message creation remain areas for future improvement.
+These results support completion of the principal TP8 frontend integration and browser verification exercises. Expired-token behavior, rejected room-join scenarios, additional reconnection edge cases, automated browser acceptance tests, and exactly-once message creation guarantees remain outside the completed verification scope.
