@@ -44,6 +44,11 @@ function App() {
   const [messages, setMessages] = useState([])
   const [messagesLoading, setMessagesLoading] = useState(false)
   const [messagesError, setMessagesError] = useState('')
+  const [messageContent, setMessageContent] = useState('')
+  const [messageSending, setMessageSending] = useState(false)
+  const [messageSendError, setMessageSendError] = useState('')
+  const [messageTransport, setMessageTransport] = useState('http')
+  const messageSendRequestRef = useRef(0)
   const [nextCursor, setNextCursor] = useState(null)
   const [olderMessagesLoading, setOlderMessagesLoading] = useState(false)
   const [olderMessagesError, setOlderMessagesError] = useState('')
@@ -492,6 +497,104 @@ function App() {
     }
   }
 
+  async function handleSendMessage(event) {
+    event.preventDefault()
+
+    const content = messageContent.trim()
+
+    if (!token || !selectedConversationId || !content || messageSending) {
+      return
+    }
+
+    const requestId = ++messageSendRequestRef.current
+    const conversationId = selectedConversationId
+    const transport = messageTransport
+
+    setMessageSending(true)
+    setMessageSendError('')
+
+    try {
+      let message
+
+      if (transport === 'socket') {
+        const socket = socketRef.current
+
+        if (!socket?.connected) {
+          throw new Error('Socket.IO is not connected.')
+        }
+
+        const result = await socket
+          .timeout(5000)
+          .emitWithAck('message:send', {
+            conversationId,
+            content,
+          })
+
+        if (messageSendRequestRef.current !== requestId) {
+          return
+        }
+
+        if (!result?.ok) {
+          throw new Error(result?.error || 'Unable to send message.')
+        }
+
+        message = result.message
+      } else {
+        const response = await fetch(
+          `/api/conversations/${conversationId}/messages`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ content }),
+          }
+        )
+
+        const data = await response.json()
+
+        if (messageSendRequestRef.current !== requestId) {
+          return
+        }
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Unable to send message.')
+        }
+
+        message = data.message
+      }
+
+      if (
+        !message ||
+        typeof message.id !== 'string' ||
+        message.conversation !== conversationId
+      ) {
+        throw new Error('Invalid message response.')
+      }
+
+      if (messageSendRequestRef.current !== requestId) {
+        return
+      }
+
+      setMessages((currentMessages) =>
+        mergeMessages(currentMessages, [message])
+      )
+
+      setMessageContent('')
+    } catch (err) {
+      if (messageSendRequestRef.current === requestId) {
+        setMessageSendError(
+          err instanceof Error ? err.message : 'Unable to send message.'
+        )
+      }
+    } finally {
+      if (messageSendRequestRef.current === requestId) {
+        setMessageSending(false)
+      }
+    }
+  }
+
   async function handleLogin(event) {
     event.preventDefault()
 
@@ -535,6 +638,10 @@ function App() {
 
 
   function handleLogout() {
+    messageSendRequestRef.current += 1
+    setMessageContent('')
+    setMessageSending(false)
+    setMessageSendError('')
     olderMessagesController.current?.abort()
     olderMessagesController.current = null
     setToken(null)
@@ -592,6 +699,10 @@ function App() {
                 <button
                   type="button"
                   onClick={() => {
+                    messageSendRequestRef.current += 1
+                    setMessageContent('')
+                    setMessageSending(false)
+                    setMessageSendError('')
                     olderMessagesController.current?.abort()
                     olderMessagesController.current = null
                     setMessages([])
@@ -649,6 +760,45 @@ function App() {
 
             {olderMessagesError && (
               <p role="alert">{olderMessagesError}</p>
+            )}
+
+
+            <h3>Send Message</h3>
+
+            <form onSubmit={handleSendMessage}>
+              <label htmlFor="message-transport">Send using</label>
+
+              <select
+                id="message-transport"
+                value={messageTransport}
+                onChange={(event) => setMessageTransport(event.target.value)}
+                disabled={messageSending}
+              >
+                <option value="http">HTTP</option>
+                <option value="socket">Socket.IO</option>
+              </select>
+
+              <label htmlFor="message-content">Message</label>
+
+              <input
+                id="message-content"
+                type="text"
+                value={messageContent}
+                onChange={(event) => setMessageContent(event.target.value)}
+                disabled={messageSending}
+                required
+              />
+
+              <button
+                type="submit"
+                disabled={messageSending || !messageContent.trim()}
+              >
+                {messageSending ? 'Sending...' : 'Send'}
+              </button>
+            </form>
+
+            {messageSendError && (
+              <p role="alert">{messageSendError}</p>
             )}
 
           </section>

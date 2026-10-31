@@ -452,3 +452,133 @@ All 25 unit tests and both permanent Socket.IO integration tests passed.
 A controlled MongoDB outage initially revealed delayed message persistence after a client timeout. Following the addition of a database readiness check to the shared message-creation service, the repeated outage test returned `server_error`, produced no notification during the failed submission, and did not persist the rejected message after recovery.
 
 These results support completion of the tested TP7 backend scenarios. React integration, broader reconnection behavior, and stronger retry/idempotency guarantees remain future work.
+
+## 6. Tech Primer 8 — React Frontend Integration Verification
+
+**Objective:**
+
+Verify that the React frontend integrates with the existing Messenger backend for authentication, authorized conversation access, message history, HTTP and Socket.IO message submission, real-time delivery, message recovery, and conversation-specific authorization.
+
+### Frontend Implementation and Single-User Verification
+
+The React frontend was integrated with the existing Express REST API and Socket.IO server. The interface supports login, authorized conversation listing, message history, message submission using HTTP or Socket.IO, and real-time message updates.
+
+| Test | Result |
+|---|---|
+| Login through the backend authentication API | PASS |
+| JWT maintained in React memory | PASS |
+| Authorized conversations displayed | PASS |
+| Message history retrieved from the backend | PASS |
+| Cursor-based history pagination | PASS |
+| Authorized Socket.IO conversation join | PASS |
+| HTTP message submission through the frontend | PASS |
+| Socket.IO message submission through the frontend | PASS |
+| Successful submissions displayed without visible duplicates | PASS |
+| Message draft cleared after successful submission | PASS |
+| Message draft preserved after a simulated HTTP network failure | PASS |
+| Composer state cleared when switching conversations or logging out | PASS |
+
+The frontend uses server-assigned message IDs when merging messages to avoid duplicate display when a Socket.IO notification and a submission response refer to the same message.
+
+### Two-User Real-Time Communication Verification
+
+Two test accounts were registered through the existing authentication API:
+
+- `tp8_member_a`
+- `tp8_member_b`
+
+A direct conversation was created through the authenticated conversation API.
+
+**Test Conversation ID:** `6ae63ed9ce63225519631ae6`
+
+User A logged in through a regular Chrome window, while User B logged in through an independent Chrome Incognito window. Both users accessed the same direct conversation with active Socket.IO connections.
+
+| Test | Result |
+|---|---|
+| Both users authenticated independently | PASS |
+| Both users accessed the same authorized conversation | PASS |
+| Both Socket.IO connections established | PASS |
+| User A submitted a message through HTTP | PASS |
+| User B displayed the HTTP-submitted message | PASS |
+| User B submitted a message through Socket.IO | PASS |
+| User A displayed the Socket.IO-submitted message | PASS |
+| Both messages appeared once in each browser | PASS |
+| Both connections remained active during the tests | PASS |
+
+The test messages were:
+
+- `tp8 two user HTTP delivery test 1`
+- `tp8 two user socket.io delivery test 1`
+
+These results demonstrate bidirectional message delivery between independently authenticated React clients using both supported submission transports.
+
+### Message Persistence and Recovery Verification
+
+After the two-user messaging tests, User A refreshed the browser, logged in again, and reopened the direct conversation.
+
+| Test | Result |
+|---|---|
+| Authentication required again after page refresh | PASS |
+| Socket.IO connection reestablished after login | PASS |
+| Previously submitted HTTP message recovered | PASS |
+| Previously submitted Socket.IO message recovered | PASS |
+| Original sender IDs preserved | PASS |
+| No duplicate messages visible after recovery | PASS |
+
+Both messages were retrieved from persisted conversation history rather than relying on the previous browser session's React state.
+
+### Unauthorized Conversation Access Verification
+
+A third test account, `tp8_member_c`, was registered but was not added to the direct conversation.
+
+**Unauthorized User ID:** `6ae64494ce63225519631ae9`
+
+| Test | Result |
+|---|---|
+| User C authenticated successfully | PASS |
+| User C established a Socket.IO connection | PASS |
+| Private conversation excluded from User C's conversation list | PASS |
+| HTTP message-history request rejected with 404 | PASS |
+| Socket.IO `conversation:join` rejected | PASS |
+
+The unauthorized HTTP history request returned:
+
+`404 Not Found — Conversation not found.`
+
+The unauthorized Socket.IO room-join attempt returned:
+
+`{ ok: false, error: "Conversation not found." }`
+
+These results demonstrate that the tested conversation's history and real-time room access are restricted by backend membership checks, not merely hidden by the React interface.
+
+### Frontend Build and Lint Verification
+
+The following commands were executed from the `client` directory:
+
+- `npm run build`
+- `npm run lint`
+
+| Check | Result |
+|---|---|
+| Vite production build | PASS |
+| ESLint | PASS |
+| Production build modules transformed | 46 |
+| Build or lint errors | None reported |
+
+### Known Limitations and Remaining Verification
+
+- A network failure or Socket.IO acknowledgement timeout does not guarantee that the server rejected the message. Automatic retries are not implemented because they could create duplicate persisted messages.
+- Server-side idempotency using client-generated request identifiers remains a potential future improvement.
+- Broader automatic reconnection and history synchronization after transient network failures have not been fully verified through the React frontend.
+- The TP8 multi-user and unauthorized-user browser checks were performed manually; they are not yet part of an automated frontend acceptance-test suite.
+- The existing TP7 integration tests still depend on previously created accounts and conversations.
+
+### TP8 Verification Conclusion
+
+The tested React frontend functionality passed authentication, authorized conversation listing, message history recovery, HTTP and Socket.IO message submission, bidirectional real-time delivery, visible message deduplication, and unauthorized conversation-access verification.
+
+Two independent browser sessions successfully exchanged messages using both submission transports. A third authenticated user was denied access to the private conversation through the conversation list, HTTP message-history endpoint, and Socket.IO room-join handler.
+
+The frontend production build and ESLint checks also passed.
+
+These results support completion of the tested TP8 frontend integration scenarios. Broader reconnection reliability, automated browser acceptance tests, and exactly-once message creation remain areas for future improvement.
