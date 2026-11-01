@@ -1,11 +1,18 @@
 # Statement of Work
 
+## IA-06 approved release scope and schedule — October 31, 2026
+
+The owner approved an MVP release focused on all mandatory IA-06 behaviors. Browser registration and username-based direct/group creation are in scope. Existing message-edit/delete and creator-only group-management APIs are retained. Their browser controls, profile editing, and persistent unread tracking are deferred because they are not required by the assignment minimum or necessary for its security and messaging workflows. Requirement identifiers are preserved; the disposition table in `requirements.md` governs the release scope. Deferred features are not claimed implemented or verified. The broader objectives, scope descriptions, and acceptance list below remain the original full-product baseline subject to that explicit disposition.
+
+The original October 28 additional-feature and October 30 verification milestones were not fully met for browser workflows and reproducible testing. October 31 work completes MVP integration, focused corrections, and verification; November 1 remains the final owner review and release-preparation target. November 2 remains the submission deadline. The owner alone will commit and push; automated completion work performs neither operation. The Gantt below records revised targets, not proof that milestones passed.
+
+
 **Project:** Messenger Application
 **Student:** Sean Hamilton
 **Course:** CPS 490 - Capstone I
 
 **Document Status:** Draft
-**Last Revised:** October 18, 2026
+**Last Revised:** October 31, 2026
 
 **Submission Date:** October 12, 2026
 **Project Delivery Deadline:** November 2, 2026
@@ -218,8 +225,8 @@ The following milestones establish the revised project timeline.
 | Requirements and Design Revisions | October 19, 2026 | Review and update the Statement of Work, requirements, and diagrams to reflect IA-06 and the selected implementation approach. |
 | Application Foundation | October 21, 2026 | Establish the Node.js and Express backend, MongoDB database, React interface, project configuration, and initial API communication. |
 | Authentication and Core Messaging | October 25, 2026 | Implement account registration, login, JWT authentication, conversation authorization, persistent direct messaging, and group messaging. |
-| Additional Feature Development | October 28, 2026 | Implement message editing and deletion, group membership management, notifications, user profile management, and real time message delivery. |
-| Integration and Verification | October 30, 2026 | Complete automated tests, multiuser acceptance testing, security checks, persistence verification, and integration corrections. |
+| MVP Integration (revised October 31) | October 31, 2026 | Finish mandatory browser workflows, preserve existing management APIs, and record approved profile/unread/browser-control deferrals. |
+| Integration and Verification (revised October 31) | November 1, 2026 | Review October 31 automated/API/Firefox results, reconcile documents, and prepare owner release review. |
 | Final Review and Release Preparation | November 1, 2026 | Review documentation, resolve remaining issues, verify clean checkout setup, and prepare the final repository submission. |
 | Final Product Delivery | November 2, 2026 | Commit and push the completed Messenger application, source code, documentation, tests, and verification evidence to GitHub. |
 
@@ -251,14 +258,14 @@ gantt
 
     section Additional Features
     Message and Group Management        :management, 2026-10-26, 3d
-    Profiles and Notifications          :profiles, 2026-10-26, 3d
+    MVP Browser Workflows               :profiles, 2026-10-29, 3d
     Real-Time Messaging                 :realtime, 2026-10-26, 3d
-    Feature Development Complete        :milestone, m5, 2026-10-28, 0d
+    MVP Workflow Integration             :milestone, m5, 2026-10-31, 0d
 
     section Verification
     Automated Testing                   :tests, 2026-10-22, 9d
-    Integration and Acceptance Testing  :integration, 2026-10-29, 2d
-    Verification Complete               :milestone, m6, 2026-10-30, 0d
+    Integration and Acceptance Testing  :integration, 2026-10-29, 3d
+    Verification Review Target          :milestone, m6, 2026-11-01, 0d
 
     section Delivery
     Corrections and Release Preparation :release, 2026-10-31, 2d

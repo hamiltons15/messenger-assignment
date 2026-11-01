@@ -123,6 +123,7 @@ io.on("connection", (socket) => {
          "message:new",
          result.message
        );
+       void notifyActivity(result.message);
      } catch (error) {
        console.error("Socket message creation failed:", error);
 
@@ -173,15 +174,30 @@ const User = require("./models/User");
 const Conversation = require("./models/Conversation");
 const validateRegistration = require("./utils/validateRegistration");
 const { hashPassword, verifyPassword } = require("./utils/password");
-const { createToken, verifyToken } = require("./utils/token");
+const { createToken, verifyToken, getJwtSecret } = require("./utils/token");
 const requireAuth = require("./middleware/auth");
 const PORT = process.env.PORT;
 const MONGO_URI = process.env.MONGO_URI;
 const Message = require("./models/Message");
 const validateConversation = require("./utils/validateConversation");
+const validateInvitees = require("./utils/validateInvitees");
 const validateMessage = require("./utils/validateMessage");
 const createMessage = require("./services/createMessage");
 
+async function notifyActivity(message) {
+  try {
+    // Re-read current membership; never use client claims or room visibility as policy.
+    const conversation = await Conversation.findById(message.conversation).select("members");
+    if (!conversation) return;
+    io.to(conversation.members.map(member => `user:${member.toString()}`)).emit(
+      "conversation:activity",
+      { conversationId: message.conversation, sender: message.sender, messageId: message.id }
+    );
+  } catch {
+    // The message is already saved: notification failure must not report write failure.
+    console.error("Unable to notify conversation activity.");
+  }
+}
 
 app.use(express.json());
 
@@ -339,6 +355,7 @@ app.get("/api/conversations", requireDatabase, requireAuth, async (req, res) => 
       members: req.userId
     })
       .sort({ createdAt: -1, _id: -1 })
+      .populate("members", "username")
       .lean();
 
     return res.status(200).json({
@@ -346,7 +363,10 @@ app.get("/api/conversations", requireDatabase, requireAuth, async (req, res) => 
         id: conversation._id.toString(),
         type: conversation.type,
         name: conversation.name || null,
-        members: conversation.members.map((member) => member.toString()),
+        members: conversation.members.map((member) => member._id.toString()),
+        participants: conversation.members.map((member) => ({
+          id: member._id.toString(), username: member.username
+        })),
         createdBy: conversation.createdBy.toString(),
         createdAt: conversation.createdAt
       }))
@@ -361,7 +381,35 @@ app.get("/api/conversations", requireDatabase, requireAuth, async (req, res) => 
 });
 
 app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) => {
-  const { type, members } = req.body || {};
+  const { type, usernames, name } = req.body || {};
+  let { members } = req.body || {};
+
+  if (name !== undefined && (typeof name !== "string" || name.trim().length > 80)) {
+    return res.status(400).json({ error: "Group name must be at most 80 characters." });
+  }
+
+  if (usernames !== undefined) {
+    if (members !== undefined) {
+      return res.status(400).json({ error: "Provide usernames or member IDs, not both." });
+    }
+    const inviteError = validateInvitees(type, usernames);
+    if (inviteError) return res.status(400).json({ error: inviteError });
+    try {
+      const invitees = await User.find({
+        username: { $in: usernames.map(value => value.trim().toLowerCase()) }
+      }).select("_id");
+      if (invitees.length !== usernames.length) {
+        return res.status(400).json({ error: "One or more usernames are not registered." });
+      }
+      members = [req.userId, ...invitees.map(invitee => invitee.id)];
+      if (new Set(members).size !== members.length) {
+        return res.status(400).json({ error: "Enter other users only; you are included automatically." });
+      }
+    } catch (error) {
+      console.error("Conversation participant lookup failed:", error);
+      return res.status(500).json({ error: "Unable to resolve conversation participants." });
+    }
+  }
 
   const validationError = validateConversation(type, members);
 
@@ -435,7 +483,8 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
 
       if (existingConversation) {
         return res.status(409).json({
-          error: "A direct conversation already exists between these users."
+          error: "A direct conversation already exists between these users.",
+          conversation: { id: existingConversation.id }
         });
       }
     }
@@ -444,6 +493,7 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
       type,
       members,
       createdBy: req.userId,
+      ...(type === "group" && name?.trim() ? { name: name.trim() } : {}),
       ...(type == "direct" ? { directKey } : {})
     });
 
@@ -703,6 +753,7 @@ app.post(
         "message:new",
         result.message
       );
+      void notifyActivity(result.message);
 
       return res.status(201).json({
         message: result.message
@@ -973,16 +1024,35 @@ app.delete(
   }
 );
 
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found." });
+});
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+  if (error.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "Invalid JSON request." });
+  }
+  if (error.type === "entity.too.large") {
+    return res.status(413).json({ error: "Request body is too large." });
+  }
+  console.error("Request failed:", error.message);
+  return res.status(500).json({ error: "Unable to complete request." });
+});
+
 async function startServer() {
   try {
     if (!PORT || !MONGO_URI) {
       throw new Error("PORT and MONGO_URI must be configured");
     }
 
-    await mongoose.connect(MONGO_URI);
+    getJwtSecret();
+    await mongoose.connect(MONGO_URI, { serverSelectionTimeoutMS: 5000 });
     console.log("Connected to MongoDB");
 
     await User.init();
+    await Conversation.init();
+    await Message.init();
     console.log("User indexes initialized");
 
     httpServer.listen(PORT, () => {

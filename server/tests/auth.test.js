@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const requireAuth = require("../middleware/auth");
 const { createToken } = require("../utils/token");
 
-require("dotenv").config();
+process.env.JWT_SECRET = "0".repeat(64); // Public test key; never read local .env.
 
 test("Missing authorization header is rejected", () => {
   const req = {

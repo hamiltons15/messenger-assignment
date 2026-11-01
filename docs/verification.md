@@ -4,6 +4,127 @@
 
 This document records the implementation tests performed for the Messenger application, their results, and any known limitations.
 
+## IA-06 release verification — October 31, 2026
+
+This section records current completion work separately from the historical TP1–TP8 records below. Historical outcomes are preserved and were not rewritten as new executions. Browser observations here came from actual Firefox instances; API/socket tests alone are not browser evidence.
+
+### Reproduce the automated checks
+
+From the root after README installation and local MongoDB startup:
+
+```bash
+npm test
+npm run test:integration
+npm run lint
+npm run build
+npm run test:browser
+npm run test:release
+docker compose config --quiet
+git diff --check
+```
+
+Unit/helper checks need no database or real secret. Integration creates a new `messenger_ia06_test_<timestamp>_<random>` database on `127.0.0.1:27017`, provisions Alice/Bob/Carol/Dave itself, generates a private process-local signing key, selects a free API port, and stops only the backend it starts. It does not reuse development fixtures or read .env values as configuration; supplied process environment overrides dotenv. It retains test records and never drops collections/databases. `MESSENGER_TEST_MONGO_PORT` selects another local MongoDB port. No application .env file is needed for these checks.
+
+The browser runner uses Python 3 standard-library Marionette control of installed Firefox, four independent headless profiles, isolated backend/Vite ports, and a fresh `messenger_ia06_browser_*` database. No new browser-testing dependency is installed. Its Firefox profiles/logs remain ignored under `.release-check/`; do not submit or share them. It observes rendered text and uses the actual forms, rather than substituting API creation for browser creation. Unauthorized checks deliberately call HTTP from an authenticated browser; separate integration cases also reject unauthorized socket joins/writes and check that outsiders receive no protected events.
+
+`npm run test:legacy --prefix server` retains the old fixed-fixture TP7 checks but is not part of release verification: it needs the original accounts/IDs and writes to those conversations. Do not run it against normal development records just to reproduce current tests.
+
+### Newly executed results
+
+| Check | Observed result | Evidence/limit |
+|---|---|---|
+| Phase A backend units | 28 passed, 0 failed | Existing 25 plus username invitation/registration validation checks. |
+| Phase A isolated integration | 12 passed, 0 failed | Fresh `messenger_ia06_test_1793488155043_d5f69dde`; 11 named cases plus the parent test. |
+| Phase B client helper tests | 5 passed, 0 failed | HTTP status, network/non-JSON errors, cancellation, stable-ID merge and timestamps. These are not component/browser tests. |
+| Phase C integration before activity notices | 18 passed, 0 failed | `messenger_ia06_test_1793488560609_89515354`; 17 named cases plus parent. |
+| Client lint and production build | Passed | Vite built 47 modules after helper extraction; build output remains ignored. |
+| Firefox acceptance run | All five scenarios and reselection passed | `messenger_ia06_browser_1793488757_2e43a769`, four actual Firefox profiles. |
+| Expanded Firefox run | All five scenarios, browser HTTP/Socket.IO sends without visible duplicates, reselection, backend outage/restart recovery, and JWT-expiry cleanup passed | `messenger_ia06_browser_1793489600_cfc124bf`; actual rendered UI observations. Short test JWT injected into one isolated login response; default eight-hour policy unchanged. |
+| Final complete automated/release run | **29 backend units, 5 client helpers, 19 integration checks passed; lint/build/Compose/smoke checks passed** | Fresh source export `.release-check/source_1793489792529_9f4b9351` (60 source files); fresh integration DB `messenger_ia06_test_1793489798705_5cff97c3`. |
+| Final Firefox regression | **All five browser scenarios, off-conversation activity, socket deduplication, reselection, outage/recovery, and session expiry passed** | `messenger_ia06_browser_1793489795_4bdd5730`; four real independent Firefox profiles. |
+
+The controlled race check explicitly performs history GET, saves a message before Bob subscribes, then joins Bob. The message is absent from both the original snapshot and Bob's live events, but present in post-join history. The client now synchronizes after every authorized join and scans all pages, merging by ID, including when newer live messages have already arrived. This avoids relying on a newest-record boundary that could skip an earlier gap.
+
+Initial Phase B lint attempts failed for an incomplete helper edit, a removed ref still referenced, and the configured error-cause rule. These were corrected; later lint/test/build runs passed. A read-only Docker status check failed with permission denied on `/var/run/docker.sock`; direct local MongoDB ping succeeded. Verification did not change Docker permissions or stop/reset the database service.
+
+### Fresh-source release observations
+
+`npm run test:release` completed successfully from a source export containing current tracked files and nonignored new files, with no copied node_modules, .env, build output, or instructor materials. `npm ci` succeeded at root, server (125 packages), and client (150 packages); backend tests verified bcrypt hashing/comparison. npm reported that bcrypt's install script was not covered by the local allowScripts policy; installation and runtime checks nevertheless passed using the installed package. No npm/system policy was changed.
+
+The exported source passed 29 backend unit tests, 5 client helper tests, and 19 integration checks (18 named cases plus the parent test), with zero failures/skips. ESLint and Vite production build passed. `docker compose config --quiet` passed. A built-client preview served HTML; its authenticated API proxy rejected a missing JWT with 401; its Socket.IO transport endpoint responded with 200. Backend/preview ran on allocated ports with generated release database `messenger_ia06_release_1793489792529_9f4b9351`. Those processes were stopped by the checker; databases were retained. No development backend/database was restarted by this check.
+
+This establishes fresh-source dependency installation, checks, build, and local startup using the already-running MongoDB. It is **not** a claimed test of a final committed clone or newly provisioned Docker service. After owner review/commit, repeat the README steps from the actual final clone before submission. The uncommitted source export is intentional because automatic commits/pushes are forbidden.
+
+### Exact browser acceptance demonstration (Ubuntu)
+
+Use a disposable demonstration database, not personal/development messages. For example, in a backend terminal:
+
+```bash
+cd server
+MONGO_URI=mongodb://127.0.0.1:27017/messenger_ia06_manual_20261031 npm start
+```
+
+This uses the configured server secret/port without changing your .env file. Choose a new database name for another independent demonstration. Run `npm run start:client` from the root in another terminal. Open http://127.0.0.1:5173 in independent browser profiles for Alice, Bob, Carol, and unrelated Dave. Register each through **Create an account**, then log in separately. Use disposable passwords and keep credentials/tokens out of screenshots.
+
+| Scenario | Exact steps | Expected outcome | Observed evidence |
+|---|---|---|---|
+| 1. Direct browser exchange | Alice chooses Direct, enters `bob`, creates; Bob refreshes conversations and selects the direct. Alice sends `IA06 Alice direct live`; Bob replies `IA06 Bob direct reply`. | Both sessions show both messages with correct senders. No API calls or MongoDB IDs needed to create/use the conversation. | Passed in the actual automated Firefox runs. Historical TP8 Chrome/Incognito exchange also retained below. |
+| 2. Live delivery | Keep both conversations open. Alice sends once; Bob leaves his page untouched. Optionally select Socket.IO for Bob's reply. | Message appears without refresh; sender response/event merge produces one visible message. | Passed in Firefox, including an explicit one-visible-copy check for a Socket.IO send. |
+| 3. Logout/offline recovery | Bob clicks Log out. Alice sends `IA06 while Bob logged out`. Bob logs in again and selects the direct. | Missed message is loaded from MongoDB history. | Passed in Firefox as this exact sequence. Separate API integration restarts the backend and checks saved IDs/content. |
+| 4. Group plus unrelated user | Alice selects Group, enters `bob, carol`, names it, and creates. Bob/Carol refresh and open it. Each member sends a distinct message and sees all contributions. Dave refreshes; group must remain absent. Run the explicit negative checks below as Dave. | Three members read/contribute; Dave cannot read/send, subscribe, or receive protected group events. | Browser creation, every member's contribution/receipt, Dave's list exclusion, and browser HTTP 404 read/write passed. Independent socket integration verifies denied group join/write and absence of protected messages/activity. |
+| 5. Private outsider attempt | While Carol/Dave are independently logged in, issue the direct negative HTTP check below against Alice/Bob's direct. | HTTP 404 without protected messages; socket join/write rejected in integration. | Direct negative HTTP checks passed from both unrelated Firefox sessions. Socket denials separately passed integration. |
+
+To repeat the direct HTTP negative checks manually without entering a MongoDB ID, keep Alice's direct selected, open her browser console, and obtain its ID from an actual history request (not a token):
+
+```js
+performance.getEntriesByType('resource').map(e => e.name)
+  .filter(n => /conversations\/[^/]+\/messages/.test(n))
+  .at(-1)?.match(/conversations\/([^/]+)\/messages/)[1]
+```
+
+Copy this nonsensitive test conversation ID. In Dave's console, run the following; enter Dave's disposable password at the prompt. The token stays in the closure and is never printed:
+
+```js
+(async () => {
+  const id = prompt('Test conversation ID from Alice');
+  const password = prompt('Dave disposable password');
+  const login = await fetch('/api/auth/login', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username: 'dave', password})
+  });
+  if (!login.ok) throw new Error('Dave login failed; do not interpret this as authorization evidence.');
+  const {token} = await login.json();
+  const headers = {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'};
+  const read = await fetch(`/api/conversations/${id}/messages`, {headers});
+  const write = await fetch(`/api/conversations/${id}/messages`, {
+    method: 'POST', headers, body: JSON.stringify({content: 'must be rejected'})
+  });
+  console.log({historyStatus: read.status, sendStatus: write.status});
+})();
+```
+
+Expected: `{historyStatus: 404, sendStatus: 404}` for both the direct and the group. Repeat for Carol's valid account against the direct, changing the username. API/ID use here is intentional adversarial verification, not a requirement for normal messaging workflows. For Socket.IO negatives, run `npm run test:integration`; named cases reject direct/group joins and writes, exclude protected events, and test removal revocation. Do not screenshot Network authorization headers.
+
+Record the observer/date, account names, browser profiles, exact message texts, expected/actual statuses, and any failed steps. Screenshots can supplement the record but must not contain passwords/JWTs. An additional interactive hand-operated run has not been claimed; the new observations are explicitly automated Firefox executions.
+
+### Reliability demonstrations
+
+- Select the already-open conversation twice: history stays visible and loading finishes. This passed actual Firefox.
+- With only the isolated test backend stopped, an HTTP send shows an unconfirmed-delivery error, retains the draft, and adds no fake message. Restarting that same backend restores live status/history. This passed Firefox; the runner stops only its own backend.
+- A short-lived, correctly signed test JWT causes the server to disconnect the socket and the UI to clear the composer/history and return to login with an expiration message. This passed Firefox. No production token lifetime was shortened.
+- Unit/helper tests cover unreadable proxy responses and cancellation; integration verifies malformed JSON returns safe HTTP 400 JSON rather than an HTML stack page.
+- Sent means server persistence, not Delivered or Read. A lost response can leave actual storage uncertain. Automatic write retries/idempotency keys are not implemented; inspect Refresh history before retrying.
+
+### Current scope and release limits
+
+Profile editing, persistent unread positions/counts, and browser edit/delete/member-management controls are approved deferrals. Existing owner/creator-authorized APIs remain and are regression-tested. Transient activity notices remain in scope; they are not persisted unread tracking. No deferred functionality is claimed complete.
+
+Fresh-source installation/build/start evidence is recorded after release verification below. Docker Compose configuration can be validated without daemon access, but new container/volume provisioning cannot be certified here because Docker socket access is denied. Existing local MongoDB is reachable and all test writes use generated test databases. No clean committed clone or remote submission is claimed before the owner commits/pushes. No secrets, normal database records, or reference files were modified.
+
+## Historical TP1–TP8 evidence (preserved)
+
+The following sections retain their original test counts and limitations. Statements about frontend integration being unfinished describe the earlier stage and are superseded where current observed evidence above explicitly covers the behavior.
+
 ## 1. Accounts and Authentication
 
 The following functionality has been implemented and tested:
@@ -675,3 +796,48 @@ Additional browser testing verified automatic recovery of two messages missed du
 The frontend production build and ESLint checks passed following the Socket.IO authentication, room-join status, timeout, and recovery-error handling changes.
 
 These results support completion of the principal TP8 frontend integration and browser verification exercises. Expired-token behavior, rejected room-join scenarios, additional reconnection edge cases, automated browser acceptance tests, and exactly-once message creation guarantees remain outside the completed verification scope.
+
+## Final IA-06 Release Verification — November 1, 2026
+
+The completed Messenger MVP was independently verified in the Ubuntu development environment using the repository's release verification script.
+
+### Environment
+
+- Node.js 24 LTS
+- MongoDB 7.0 running through Docker Compose
+- Existing `messenger-assignment-mongodb-1` container confirmed running and accessible on `127.0.0.1:27017`
+- Release verification executed from the repository root using `npm run test:release`
+
+### Verification Results
+
+| Verification | Result |
+|---|---|
+| Fresh source export | PASS — 60 tracked and nonignored source files exported |
+| Fresh dependency installation | PASS |
+| Backend unit tests | PASS — 29/29 |
+| Frontend helper tests | PASS — 5/5 |
+| Isolated API and Socket.IO integration checks | PASS — 19/19 |
+| Frontend ESLint | PASS |
+| Vite production build | PASS |
+| Docker Compose configuration validation | PASS |
+| Built-client HTTP connectivity | PASS |
+| API proxy and authentication smoke check | PASS |
+| Socket.IO transport smoke check | PASS |
+| Git ignore checks for secrets, dependencies, build artifacts, and verification output | PASS |
+| `git diff --check` | PASS — no whitespace errors |
+
+**Automated test summary:** 53 passed, 0 failed.
+
+Integration testing used a uniquely named disposable database, `messenger_ia06_test_1793572633442_d23e2496`. The release startup check used `messenger_ia06_release_1793572629279_810cfdc9`. Both were retained for inspection. Existing development records were not intentionally modified by these checks.
+
+### Evidence Boundaries
+
+The November 1 release verification used an export of the current uncommitted source. It did not test a final committed clone or verify successful remote submission.
+
+Docker Compose configuration validation passed, and the existing MongoDB container was independently confirmed running. Provisioning MongoDB from scratch in a fresh environment was not performed.
+
+The October 31 automated Firefox acceptance demonstrations reported earlier in this document remain separate browser-level evidence; they were not rerun during the November 1 release verification.
+
+Historical TP8 limitations reflect the state of the project at that time. Subsequent MVP completion added automated browser acceptance coverage, as recorded in the October 31 completion evidence.
+
+Final Git staging, commit, remote pushes, and committed-clone verification remain outstanding at the time of this entry.

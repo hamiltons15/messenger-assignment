@@ -1,12 +1,21 @@
 # Messenger Diagrams and Analysis
 
+## IA-06 implementation reconciliation — October 31, 2026
+
+This document's earlier analysis is retained as design history. For the approved MVP, P1 provides registration/login/current identity; profile modification is deferred. P2 provides browser username-based direct/group creation and the preserved membership APIs. P3 retains owner-only edit/delete APIs while their browser controls are deferred. P5 delivers saved new messages; persistent unread tracking is deferred; transient activity notices remain implemented. See the release disposition in `requirements.md` and observed tests in `verification.md`.
+
+UQ-03 and UQ-04 are resolved: only the creator manages members, a group retains at least three members, removed users lose protected access/subscriptions, and current/readded members can read the entire history. UQ-09 specifies deterministic ordering, local timestamp display, confirmed storage states, and no automatic write retries. UQ-10 uses eight-hour memory-held JWTs. Earlier passages calling these questions unresolved describe the previous design stage.
+
+Diagram sources are reconciled to server-side JWT/membership enforcement and persistence-before-notification. Protected middleware verifies the JWT; it does not query the User collection for every message. `/api/auth/me` performs current account lookup. Room membership is authorized at join and revoked on removal, rather than querying recipients separately for every full-message broadcast; transient activity notices additionally query current membership. The implementation report distinguishes verified sequential removal from unverified distributed/concurrent membership races.
+
+
 **Project:** Messenger Application  
 **Student:** Sean Hamilton  
 **Course:** CPS 490 - Capstone I
 
 **Document Status:** Draft  
 **Submission Date:** October 12, 2026  
-**Last Revised:** October 19, 2026
+**Last Revised:** October 31, 2026
 
 ---
 

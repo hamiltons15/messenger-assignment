@@ -36,6 +36,7 @@ function verifyToken(token) {
 }
 
 module.exports = {
+  getJwtSecret,
   createToken,
   verifyToken
 };

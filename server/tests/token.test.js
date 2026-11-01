@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { createToken, verifyToken } = require("../utils/token");
 const jwt = require("jsonwebtoken");
 
-require("dotenv").config();
+process.env.JWT_SECRET = "0".repeat(64); // Public test key; never read local .env.
 
 test("Valid JWT contains the correct user ID", () => {
   const userId = "6adf761f90c902467dc9fde8";

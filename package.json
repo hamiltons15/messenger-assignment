@@ -1,0 +1,17 @@
+{
+  "name": "cps490-messenger",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "setup": "npm ci --prefix server && npm ci --prefix client",
+    "start:server": "npm start --prefix server",
+    "start:client": "npm run dev --prefix client",
+    "test": "npm test --prefix server && npm test --prefix client",
+    "test:integration": "npm run test:integration --prefix server",
+    "test:browser": "python3 scripts/verify-browser.py",
+    "test:release": "node scripts/verify-release.js",
+    "lint": "npm run lint --prefix client",
+    "build": "npm run build --prefix client"
+  }
+}

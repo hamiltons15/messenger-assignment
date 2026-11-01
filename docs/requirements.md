@@ -5,7 +5,7 @@
 **Course:** CPS 490 - Capstone I  
 
 **Document Status:** Draft 
-**Last Revised:** October 22, 2026
+**Last Revised:** October 31, 2026
 
 **Submission Date:** October 12, 2026
 
@@ -21,6 +21,27 @@
 | October 26, 2026 | Conversation Implementation Decisions | Documented the conversation creation rules established during implementation. Confirmed that direct conversations require exactly two distinct registered users, group conversations require at least three distinct registered users, and the authenticated creator must be included in the conversation membership. Verified that conversation creation enforces input validation, membership authorization, and persistent storage. |
 
 ---
+
+## IA-06 MVP release disposition — approved October 31, 2026
+
+The owner approved completion of the IA-06 minimum and the explicit deferrals below. Stable FR/AC/NFR/UQ identifiers and original full-product descriptions are retained. This disposition qualifies those descriptions for the November 2 release; deferred portions are not implemented or verified MVP acceptance criteria. No mandatory IA-06 behavior is deferred.
+
+| Requirement/decision | IA-06 disposition |
+|---|---|
+| FR-01/02/03/05/09/10/11/12; NFR-01/03/04/05 | Mandatory MVP: browser registration/login/logout/current identity, username-based direct/group creation, authorized listing, persistent ordered history, membership enforcement, live delivery/recovery, reliable states, and reproducibility. |
+| FR-04 / AC-04 | Group creation remains mandatory. Existing creator-only add/remove APIs and security rules remain implemented; browser membership-management controls are deferred. |
+| FR-06 / AC-06 / UQ-06 | Existing owner-only edit and soft-delete APIs remain implemented and regression-tested. Browser edit/delete controls are deferred. No claim of complete browser FR-06 verification is made. |
+| FR-07 / AC-07; unread portions of UQ-09 | Transient in-app conversation activity notices are implemented for connected members. Persistent unread tracking/read positions/counts are deferred. Live display remains mandatory under FR-11. |
+| FR-08 / AC-08 / UQ-07 | Current account ID/username and identification remain implemented. Profile editing is deferred; it is not a verified feature. |
+| UQ-09 | Local-time message timestamps and Sending/Sent/unconfirmed-failure presentation remain in scope. No Delivered/Read status or automatic write retry. |
+| UQ-05 | Voluntary group leaving remains an unresolved future feature, not a new IA-06 obligation. |
+| NFR-02 | Read with this release disposition: preserve the required stack and existing APIs; additional full-product features are not required to declare the IA-06 MVP ready. |
+
+Justification: the deferred browser/profile/unread features are not explicitly required by IA-06, are not dependencies of its account/direct/group/history/security workflows, and would consume near-deadline implementation and verification effort. Authorization and test isolation are not reduced. The preserved management APIs retain creator-only permissions, minimum group size, removal revocation, and current-member full-history rules.
+
+Revision decision: the October 22 revision-history reference to one-hour JWTs describes the earlier decision. The current UQ-10 decision and implementation use **eight hours**; no token-security policy is changed by this reconciliation. Browser JWTs remain in memory; logout discards them and disconnects the socket without server-side revocation.
+
+The implementation accepts either legacy member IDs or `usernames` (never both) for conversation creation. Username input lists other registered users only; the backend includes the verified creator automatically, resolves names case-insensitively, and enforces the existing cardinality, membership, and uniqueness rules. Optional group names are limited to 80 characters. Participants are shown by username without exposing password hashes.
 
 ## 1. System Context
 
@@ -80,6 +101,8 @@ Group messages shall be associated with the correct conversation and sender so t
 
 ### FR-04 - Group Management
 
+**Release status: group creation is mandatory; existing membership APIs are preserved. Browser member-management controls are deferred as approved above.**
+
 The Messenger system shall allow authenticated users to create group conversations containing multiple registered users.
 
 The system shall allow authorized users to add registered users to an existing group conversation and remove members from a group conversation according to the established group membership permissions.
@@ -106,6 +129,8 @@ The system shall allow authorized users to retrieve messages sent while they wer
 
 ### FR-06 - Message Editing and Deletion
 
+**Release status: backend behavior is preserved; browser controls are an approved deferral. The full-product browser requirement below is not claimed complete.**
+
 The Messenger system shall allow authenticated users to edit or delete messages they have previously sent within private and group conversations.
 
 When a user edits a message, the system shall update the stored message content and display the updated content in the correct conversation.
@@ -121,6 +146,8 @@ Message edits and deletions shall be stored persistently so that the resulting c
 
 ### FR-07 - Message Notifications
 
+**Release status: transient in-app activity notices are in scope. Persistent unread tracking/counts are deferred. FR-11 live display remains mandatory.**
+
 The Messenger system shall provide notifications within the browser interface when an authenticated user receives a new private or group message.
 
 When a new private message is received, the system shall notify the intended recipient. When a new group message is received, the system shall notify the applicable authorized group members.
@@ -133,6 +160,8 @@ The system shall use its real time communication capabilities to support notific
 
 
 ### FR-08 - User Profiles
+
+**Release status: current account identification is in scope; profile modification and its acceptance tests below are deferred future scope.**
 
 The Messenger system shall allow authenticated users to access and view the basic profile information associated with their registered accounts.
 
@@ -336,7 +365,7 @@ The system shall not require deployment to an externally hosted production envir
 
 2. An authorized group member can send a message to the group conversation.
 
-3. When a direct conversation already exists between the same two participants, the system shall reject attempts to create a duplicate conversation with an HTTP 409 Conflict response. Authorized participants shall still be able to retrieve and access the existing conversation through the application's conversation listing functionality.
+3. The authenticated creator is included in a group containing at least three distinct registered users. Direct-conversation duplicate behavior belongs to AC-02 and UQ-11; it is not a group criterion.
 
 4. Other authorized group members can retrieve and view messages sent within the group conversation.
 
@@ -693,7 +722,9 @@ External identity providers and existing institutional account directories are n
 
 #### UQ-02 - Notification Method and Behavior
 
-**Status:** Partially Resolved
+**Status:** Resolved for the MVP
+
+**MVP decision (October 31):** A transient in-app notice identifies the conversation when another user sends a saved message. Current membership is queried before sending activity to authenticated user rooms, including when the recipient is viewing another conversation. The notice also appears for the currently open conversation and is cleared when that conversation is selected or on logout. It retains only the latest activity in component memory; there is no unread count, read-position storage, or notification replay. The historical presentation questions below are superseded by this decision for the release.
 
 **Question:** How will the Messenger system present notifications for new private and group messages, and how should those notifications behave depending on the user's current activity?
 
@@ -808,7 +839,9 @@ When a user is no longer an authorized group member, the system will prevent tha
 
 #### UQ-06 - Message Editing and Deletion Behavior
 
-**Status:** Unresolved
+**Status:** Partially resolved for backend; browser controls deferred
+
+**Implementation decisions (October 31):** Current members may edit/delete their own active messages without a time window. Deletion retains a placeholder and timestamps. Previous content is overwritten; no edit-history store is implemented. Changes appear on history retrieval; immediate edit/delete broadcasts are not implemented. The historical design questions below remain future considerations where not answered here.
 
 **Question:** How will the Messenger system handle message editing and deletion, including time restrictions, message history presentation, and updates to other conversation participants?
 
@@ -943,11 +976,7 @@ If the backend rejects a message submission or the submission fails, the interfa
 
 Connection interruptions will not change the established definition of the Sent state, which requires confirmation of successful backend persistence. The interface will not claim that another user's client received a message solely because the backend stored it.
 
-Messenger will provide in-app unread message indicators for conversations containing messages that the authenticated user has not yet viewed. When a user reconnects or logs back into Messenger, the system will retrieve stored conversation messages and identify messages that remain unread.
-
-The conversation list will display an unread message count for each conversation containing unread messages. Opening a conversation and successfully loading its message history will clear that conversation's unread indicator. Messenger will maintain a per-user, per-conversation read position to track unread messages without exposing read receipts to other participants.
-
-Unread message indicators will be available within the Messenger application only. The initial implementation will not include external push notifications, email notifications, or visible read receipts. Unread message tracking will not change the established Sending, Sent, and Failed message states or the requirement that messages be persisted before real-time delivery.
+**Approved MVP deferral, October 31, 2026:** Persistent unread indicators, unread counts, and per-user/per-conversation read positions are deferred; transient FR-07 notifications remain in scope. They remain future product intent, not implemented release behavior. This does not defer live message display, persistent missed-message recovery, or accurate submission states. The UI indicates an unconfirmed submission when a response is lost, rather than claiming a definitive rejection or delivery. Users can refresh history before retrying.
 
 **Related Requirements:** FR-05, FR-07, FR-09, FR-11, NFR-03, NFR-04, AC-05, AC-07, AC-09, AC-11, AC-13
 
@@ -1053,4 +1082,5 @@ The following tables map the Messenger system's functional and nonfunctional req
 | NFR-02 | Prototype Scope Constraint | AC-14 | Statement of Work, Sections 3.1 and 3.2; IA-06 |
 | NFR-03 | Message Persistence | AC-05, AC-11 | Statement of Work, Section 3.1; IA-06 |
 | NFR-04 | Application Reliability and Error Handling | AC-13 | Statement of Work, Section 3.1; IA-06 |
+| NFR-05 | Reproducible Local Execution | AC-14 | IA-06 |
 | NFR-05 | Reproducible Local Execution | AC-14 | Statement of Work, Sections 3.1 and 7.2; IA-06 |

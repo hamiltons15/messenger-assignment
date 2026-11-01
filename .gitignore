@@ -33,3 +33,9 @@ Thumbs.db
 
 # Local database files
 mongodb-data/
+
+# Class materials
+/docs/reference-materials/
+
+# Local clean-source release verification (includes disposable dependencies/builds).
+/.release-check/

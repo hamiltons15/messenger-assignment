@@ -1,5 +1,12 @@
 # Messenger Ethics Reflection
 
+## IA-06 release review — October 31, 2026
+
+The earlier ethical analysis is retained as historical reasoning. Identity and group-policy questions referenced as unresolved below have since been resolved in requirements UQ-01/03/04/10: internal bcrypt/JWT accounts, creator-only membership changes, current-member full-history access, removal revocation, and eight-hour tokens. Server authorization remains mandatory for both HTTP and Socket.IO; browser visibility never grants access.
+
+The owner approved deferring profile editing, persistent unread tracking, and browser edit/delete/member-management controls for the IA-06 MVP. Existing protected backend management APIs are preserved. These deferrals do not reduce authentication, privacy checks, or mandatory direct/group messaging. Voluntary leaving and moderation remain future considerations; no new moderation product is implied. Already-seen content cannot be remotely erased, logout does not revoke copied JWTs, and retention/test databases are not automatically purged. Use disposable accounts and avoid personal/sensitive messages in this local prototype. Deferred requirements are not presented as implemented protections.
+
+
 **Project:** Messenger Application  
 **Student:** Sean Hamilton  
 **Course:** CPS 490 - Capstone I 

@@ -1,5 +1,5 @@
 @startuml
-title Messenger - Private Messaging Sequence Diagram
+title Messenger - IA-06 Private Messaging Sequence Diagram
 
 actor "Sender" as Sender
 boundary "Messenger Interface" as UI
@@ -7,10 +7,9 @@ control "Account Authentication" as Auth
 control "Conversation Authorization" as Access
 control "Message Processing" as P3
 control "Retrieve Message History" as P4
-database "User Accounts and Profiles" as D1
 database "Conversations and Membership" as D3
 database "Messages" as D2
-control "Real-Time Delivery and Notifications" as P5
+control "Real-Time Delivery" as P5
 actor "Recipient" as Recipient
 
 ' Sender Submits a Private Message
@@ -23,16 +22,6 @@ group Send Private Message
 
     ' Reject Invalid Sender JWT
     break Sender JWT invalid or expired
-        Auth --> UI : Authentication failed
-        UI --> Sender : Display authentication error
-    end
-
-    ' Verify Registered Sender Account
-    Auth -> D1 : Look up account using verified identity
-    D1 --> Auth : Account information
-
-    ' Reject Invalid Sender Account
-    break Sender account missing or inactive
         Auth --> UI : Authentication failed
         UI --> Sender : Display authentication error
     end
@@ -79,13 +68,17 @@ group Send Private Message
 
     ' Real-Time Message Delivery
     P3 -> P5 : Successfully stored message information
-    P5 -> D3 : Verify recipient conversation membership
-    D3 --> P5 : Recipient membership result
+    P5 -> P5 : Use server-authorized conversation rooms
+    note right of P5
+        JWT verified at connection and expiry enforced.
+        Membership checked before join and message writes.
+        Removal revokes existing room subscriptions.
+    end note
 
     ' Recipient Delivery Outcomes
     alt Recipient authorized and connected
         P5 --> Recipient : Deliver message through Socket.IO
-        P5 --> Recipient : Send new message notification
+        P5 --> Recipient : Transient activity notice (current membership checked)
 
     else Recipient authorized but offline
         P5 -> P5 : No active Socket.IO connection
@@ -110,16 +103,6 @@ group Retrieve Private Conversation History
 
     ' Reject Invalid Recipient JWT
     break Recipient JWT invalid or expired
-        Auth --> UI : Authentication failed
-        UI --> Recipient : Display authentication error
-    end
-
-    ' Verify Registered Recipient Account
-    Auth -> D1 : Look up account using verified identity
-    D1 --> Auth : Account information
-
-    ' Reject Invalid Recipient Account
-    break Recipient account missing or inactive
         Auth --> UI : Authentication failed
         UI --> Recipient : Display authentication error
     end
@@ -152,5 +135,11 @@ group Retrieve Private Conversation History
         UI --> Recipient : Display history error
     end
 end
+
+note over Auth, P5
+  These controls run on the server. UI identity/membership claims are untrusted.
+  Current account lookup uses /api/auth/me; message middleware verifies JWTs.
+  Persistent unread tracking is an approved deferral.
+end note
 
 @enduml

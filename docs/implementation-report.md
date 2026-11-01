@@ -1,0 +1,52 @@
+# IA-06 Implementation Report
+
+Release review: October 31, 2026. Required deadline: November 2, 2026.
+
+## Outcome and evidence boundaries
+
+The existing MERN/Socket.IO application was completed in place. Browser registration and username-based direct/group creation were added; existing edit/delete and group-management APIs were retained. No replacement project, framework, third-party dependency, database reset, commit, or push was introduced.
+
+Evidence below distinguishes executed automated checks, actual automated Firefox observations, historical manual evidence, and approved deferrals. `docs/verification.md` contains reproduction commands, exact acceptance steps, run records, and limitations. The final committed clone and remote submission remain the repository owner's responsibility.
+
+## Requirement traceability
+
+| ID / requirement | Implementing module or endpoint | Reproducible test / demonstration | Observed outcome and limitation |
+|---|---|---|---|
+| FR-01 / AC-01 registration | `server/index.js` POST `/api/auth/register`; `models/User.js`; `utils/validateRegistration.js`; React auth form | `npm test`; integration registration/bcrypt case; `npm run test:browser` registration in four profiles | Passed API validation/uniqueness/bcrypt checks and actual browser registration. Profile editing is separately deferred. |
+| FR-02 / AC-02 direct messages and uniqueness | POST/list `/api/conversations`; `models/Conversation.js` canonical `directKey`; React create/select/send | Integration username/legacy input, reverse pair and concurrent creation; browser scenarios 1/2 | Passed: one direct pair, duplicate 409, server-attributed messages and live bidirectional browser exchange. |
+| FR-03 / AC-03 group messaging | Same conversation API with group invariant; message service/history; React group form | Integration each-member and outsider cases; browser scenario 4 | Passed: Alice creates group through React; Alice/Bob/Carol each read/contribute; unrelated Dave cannot read/send. Socket nonmembership independently rejected in integration tests. |
+| FR-04 / AC-04 group management | POST `/api/conversations/:id/members`; DELETE member route; removal calls `socketsLeave` | Integration creator-only management/revocation; historical membership/restart record | Preserved API checks passed. Group creation is browser-verified; browser membership-management controls are approved deferred scope, not complete FR-04 browser functionality. |
+| FR-05 / AC-05 history | GET `/api/conversations/:id/messages`; `models/Message.js`; React history/pagination/recovery | Integration backend restart, ties/cursors, reconnect; browser scenario 3 | Passed API restart and stable pagination; actual Bob logout/missed-message/login recovery. Every authorized join rescans saved history. |
+| FR-06 / AC-06 edit/delete | PATCH/DELETE message routes; sender/member filters; `editedAt`/`deletedAt` | Integration preserved-API case; historical restart evidence | Owner-only edit/soft-delete APIs passed regressions. Browser controls are deferred and not claimed verified. No edit-history store or immediate edit/delete broadcasts. |
+| FR-07 / AC-07 notifications | `conversation:activity` to current-member user rooms; React activity notice | Integration activity-notice authorization case; scope disposition in `requirements.md` | Transient notices passed isolated authorization tests and actual off-conversation Firefox observation. **Persistent unread positions/counts are deferred**, not implemented or verified. |
+| FR-08 / AC-08 profiles | Login response and GET `/api/auth/me`; authenticated username display | Integration current-account lookup; browser logged-in identity | Current account identification passed. **Profile editing deferred**; no profile-update endpoint/UI is claimed. |
+| FR-09 / AC-09 authorization | `middleware/auth.js`; membership-filtered HTTP queries; socket handshake/join/send; removal revocation | Unit token checks; integration HTTP/socket direct/group denials; browser unauthorized HTTP | Passed tested allowed/rejected operations, forged sender handling, expiry and sequential removal. Concurrent/distributed membership races remain outside verified guarantees. |
+| FR-10 / AC-10 sessions | bcrypt utility; JWT issuer/audience/HS256 checks; eight-hour expiry; `/api/auth/me`; React `endSession` | Unit JWT/middleware/startup tests; login integration; Firefox logout/login | Passed token/backend/session checks and browser logout/relogin. Memory-only JWT; logout is not copied-token revocation. |
+| FR-11 / AC-11 live delivery | Shared `services/createMessage.js`, awaited persistence, `message:new`, authenticated rooms; React live listener and reconciliation | Integration saved-ID/live event/reconnect tests; Firefox scenarios 1/2/3 | Passed API/socket delivery and real browser live receipt without refresh. No exactly-once retry guarantee. |
+| FR-12 / AC-12 conversation listing | GET `/api/conversations` filters persisted membership and projects participant usernames; React list/refresh | Integration listing exclusion; actual browser recipient refresh/select and outsider exclusion | Passed. Newly created remote conversations require list refresh; no separate automatic conversation-discovery event is implemented. |
+| NFR-01 security | bcrypt, verified JWT-derived identity, membership checks, safe projections, expiry | `npm test`; `npm run test:integration` | Tested boundaries passed. Local prototype; no refresh-token/revocation/rate-limiting system or public-production security claim. |
+| NFR-02 prescribed stack/scope | App manifests/lockfiles; Node 24; Compose MongoDB; approved release disposition | Runtime inspection; setup/build/test checks | Required stack retained. Deferred broader product features are explicitly recorded. |
+| NFR-03 persistence | MongoDB relationships/timestamps/indexes; write-before-emission shared service | Backend restart, history, live-record checks; browser offline/logout recovery | Passed executed cases. Historical controlled outage evidence retained; every mid-operation database-loss race is not claimed eliminated. |
+| NFR-04 / AC-13 reliability | `client/src/api.js`; pending-write guards; request cancellation/generations; reselection guard; post-join synchronization; JSON error middleware | Client helper tests; integration malformed JSON/race test; Firefox reselection; verification failure checks | Executed tests, including actual Firefox outage/expiry/reselection checks, passed. Network/timeout send outcomes remain explicitly unconfirmed; no automatic retry. |
+| NFR-05 / AC-14 reproducibility | Root README, manifests/lockfiles, examples, Compose, ignore rules; `scripts/verify-release.js` | `npm run test:release`; `docker compose config --quiet`; final Git/artifact audit | Fresh source install/test/lint/build/start and Compose config passed; details recorded in `verification.md`. Actual final committed clone and remote submission require owner action; fresh Docker provisioning is environment-limited. |
+
+## Focused engineering decisions
+
+- Preserve ID-based conversation input. Add mutually exclusive `usernames`, resolve only registered accounts server-side, and include the authenticated creator. Reuse all existing membership/cardinality/uniqueness rules. A duplicate direct creation remains HTTP 409; an existing ID can be returned to an authorized participant for navigation.
+- Return only participant IDs/usernames, never password hashes. Group names use the existing optional model field, with route validation; no schema migration is required.
+- Initialize User, Conversation, and Message indexes before accepting requests. Validate the unchanged 64-hex JWT secret policy at startup, rather than discovering misconfiguration during login.
+- Reselecting the current conversation no longer clears state without triggering an effect. Session termination clears private client state, invalidates pending result handlers, and closes the socket. An obsolete request's 401 cannot terminate a newer login.
+- A controlled test demonstrated the initial history/subscription gap. Read history after **every successful join**, not only reconnects. Scan all pages and reconcile by durable ID so later live arrivals cannot hide an earlier missed record. Keep initial HTTP history independent of socket availability. Cancel obsolete recovery work on disconnect/switch/logout.
+- Normalize network/non-JSON errors, preserve HTTP status, and provide Refresh history after an ambiguous write. Sent means confirmed server persistence, never recipient receipt. Display server timestamps in local time.
+- Default integration tests provision fresh fixtures in a generated database and run a private backend process. Old TP7 scripts remain available only through an explicitly named legacy command.
+- No new third-party dependencies. Python's standard library controls installed Firefox for actual browser verification; Node's standard library orchestrates fresh-source release checks.
+
+## Approved scope reconciliation
+
+Owner approval on October 31 authorizes deferral of profile editing, persistent unread tracking, and browser edit/delete/member-management controls. FR/AC IDs are preserved; backend capabilities and security policies remain intact. Transient in-app activity notices remain implemented under FR-07; persistent unread tracking is deferred. Live display and offline recovery are mandatory and remain implemented. See the release disposition in `requirements.md`, and the reconciliation notes in SOW, analysis, and ethics documents.
+
+UQ-10 and code use eight-hour JWTs; the earlier one-hour revision describes historical intent. UQ-03/04 are resolved creator/current-membership policies. The diagrams are reconciled to actual JWT and authorized-room behavior. The original schedule was revised honestly; a target date is not verification evidence.
+
+## Release limitations
+
+No public hosting is required or claimed. Verification does not delete test databases; they contain generated disposable accounts/messages. Test profiles, caches, dependencies, build output, real `.env` files, and instructor materials remain ignored. The owner must inspect, stage, commit, and manually push the final intended files; this report does not certify an unperformed remote submission.
