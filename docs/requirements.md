@@ -1082,5 +1082,4 @@ The following tables map the Messenger system's functional and nonfunctional req
 | NFR-02 | Prototype Scope Constraint | AC-14 | Statement of Work, Sections 3.1 and 3.2; IA-06 |
 | NFR-03 | Message Persistence | AC-05, AC-11 | Statement of Work, Section 3.1; IA-06 |
 | NFR-04 | Application Reliability and Error Handling | AC-13 | Statement of Work, Section 3.1; IA-06 |
-| NFR-05 | Reproducible Local Execution | AC-14 | IA-06 |
 | NFR-05 | Reproducible Local Execution | AC-14 | Statement of Work, Sections 3.1 and 7.2; IA-06 |
