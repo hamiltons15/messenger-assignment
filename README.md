@@ -39,9 +39,24 @@ npm run start:server
 npm run start:client
 ```
 
-Open **http://127.0.0.1:5173**. Register accounts, then log in. To start a direct conversation, enter one other registered username. For a group, enter at least two other usernames separated by commas; your account is included automatically. An optional group name helps identify it. Connected recipients receive a transient new-message notice; no persistent unread counts are kept. Existing participants can use **Refresh conversations** to discover a conversation someone else created. Direct duplicates open the existing conversation when its ID is returned, or remain accessible from the refreshed list.
+Open **http://127.0.0.1:5173** in your browser. Follow the account creation instructions below before starting a conversation.
 
-Open independent browser profiles/windows for different users. Select a conversation and send messages. History is displayed oldest first with local timestamps; **Load older messages** uses server cursors. **Refresh history** checks saved state after uncertain delivery. Logout discards the in-memory JWT and closes the socket; a page refresh requires login again. A JWT expires after eight hours. Client logout does not revoke a copied JWT on the server.
+### Create test accounts
+
+1. Use the registration form to create an account with a unique username and password.
+2. Log in using the credentials you registered.
+3. For multi user testing, create at least three accounts, such as `alice`, `bob`, and `carol`. Use separate browser profiles or private browsing sessions so multiple users can remain logged in independently.
+4. Use these accounts to verify direct messaging, group conversations, live message delivery, and persistent message history.
+
+Accounts are stored in MongoDB, and passwords are stored as bcrypt hashes rather than plaintext. The application does not include predefined test accounts. Do not commit actual account credentials or passwords to the repository.
+
+### Using Messenger
+
+To start a direct conversation, enter one other registered username. For a group, enter at least two other registered usernames separated by commas; your account is included automatically. An optional group name helps identify it.
+
+Select a conversation and send messages. Connected recipients receive a transient new-message notice; no persistent unread counts are kept. Existing participants can use **Refresh conversations** to discover a conversation someone else created. Direct duplicates open the existing conversation when its ID is returned, or remain accessible from the refreshed list.
+
+History is displayed oldest first with local timestamps; **Load older messages** uses server cursors. **Refresh history** checks saved state after uncertain delivery. Logout discards the in-memory JWT and closes the socket; a page refresh requires login again. A JWT expires after eight hours. Client logout does not revoke a copied JWT on the server.
 
 ## Tests and build
 
@@ -105,7 +120,7 @@ Do not delete volumes or reset databases to troubleshoot. No `docker compose dow
 
 ## Scope and limitations
 
-The MVP retains the established API for owner-only message edits/soft deletion and creator-only group membership management. Their browser controls, profile editing, and persistent unread tracking are **approved deferrals**, not implemented/verified browser features. Current account identification and live messages remain mandatory and implemented. See [requirements](docs/requirements.md) and [implementation report](docs/implementation-report.md).
+The MVP retains the established API for sender-only message edits/soft deletion and creator-only group membership management. Browser controls for these operations, profile editing, and persistent unread tracking were deferred from the implemented MVP scope and are not claimed as verified browser features. Current account identification and live messaging remain implemented. See [requirements](docs/requirements.md) and [implementation report](docs/implementation-report.md).
 
 No attachments, search, read receipts, public deployment, or refresh-token service is included. A lost response does not establish whether a write committed; there are no automatic write retries or server idempotency keys. History is rescanned after authorized joins/reconnects for correctness; this is suitable for the small MVP, not optimized for very large histories. Membership removal prevents subsequent protected access/events, but cannot erase content already seen. Distributed/concurrent membership-change races and every possible mid-write MongoDB outage are not claimed solved.
 
