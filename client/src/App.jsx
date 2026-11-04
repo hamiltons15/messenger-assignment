@@ -30,7 +30,6 @@ function App() {
   const [messageContent, setMessageContent] = useState('')
   const [messageSending, setMessageSending] = useState(false)
   const [messageSendError, setMessageSendError] = useState('')
-  const [messageTransport, setMessageTransport] = useState('http')
   const messageSendRequestRef = useRef(0)
   const [nextCursor, setNextCursor] = useState(null)
   const [olderMessagesLoading, setOlderMessagesLoading] = useState(false)
@@ -152,6 +151,14 @@ function App() {
     socket.on('conversation:activity', activity => {
       if (activity?.conversationId && activity.sender !== user?.id) {
         setActivityConversation(activity.conversationId)
+      }
+    })
+
+    socket.on('conversation:created', event => {
+      if (event?.conversationId) {
+        setConversationsLoading(true)
+        setConversationsError('')
+        setConversationReload(value => value + 1)
       }
     })
 
@@ -531,82 +538,55 @@ function App() {
 
     const requestId = ++messageSendRequestRef.current
     const conversationId = selectedConversationId
-    const transport = messageTransport
 
     setMessageSending(true)
     setSendStatus('Sending…')
     setMessageSendError('')
 
     try {
-      let message
+          const socket = socketRef.current
 
-      if (transport === 'socket') {
-        const socket = socketRef.current
-
-        if (!socket?.connected || socketStatus !== 'live') {
-          throw new Error('Socket.IO is not authorized for this conversation.')
-        }
-
-        const result = await socket
-          .timeout(5000)
-          .emitWithAck('message:send', {
-            conversationId,
-            content,
-          })
-
-        if (messageSendRequestRef.current !== requestId) {
-          return
-        }
-
-        if (!result?.ok) {
-          throw new Error(result?.error || 'Unable to send message.')
-        }
-
-        message = result.message
-      } else {
-        const { response, data } = await requestJson(
-          `/api/conversations/${conversationId}/messages`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ content }),
+          if (!socket?.connected || socketStatus !== 'live') {
+            throw new Error('Socket.IO is not authorized for this conversation.')
           }
-        )
 
+          const result = await socket
+            .timeout(5000)
+            .emitWithAck('message:send', {
+              conversationId,
+              content,
+            })
 
-        if (messageSendRequestRef.current !== requestId) {
-          return
-        }
+          if (messageSendRequestRef.current !== requestId) {
+            return
+          }
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Unable to send message.')
-        }
+          if (!result?.ok) {
+            throw new Error(result?.error || 'Unable to send message.')
+          }
 
-        message = data.message
-      }
+          const message = result.message
 
-      if (
-        !message ||
-        typeof message.id !== 'string' ||
-        message.conversation !== conversationId
-      ) {
-        throw new Error('Invalid message response.')
-      }
+          if (
+            !message ||
+            typeof message.id !== 'string' ||
+            message.conversation !== conversationId
+          ) {
+            throw new Error('Invalid message response.')
+          }
 
-      if (messageSendRequestRef.current !== requestId) {
-        return
-      }
+          if (messageSendRequestRef.current !== requestId) {
+            return
+          }
 
-      setMessages((currentMessages) =>
-        mergeMessages(currentMessages, [message])
-      )
+          setMessages((currentMessages) =>
+            mergeMessages(currentMessages, [message])
+          )
 
-      setMessageContent('')
-      setSendStatus('Sent — saved by the server.')
-    } catch (err) {
+          setMessageContent('')
+          setSendStatus('Sent — saved by the server.')
+        } catch (err) {
+
       if (messageSendRequestRef.current === requestId) {
         setSendStatus('Failed to confirm delivery.')
         setMessageSendError(`${err instanceof Error ? err.message : 'Unable to send message.'} Delivery is unconfirmed. Check history before sending again; this message was not automatically retried.`)
@@ -857,17 +837,6 @@ function App() {
             <h3>Send Message</h3>
 
             <form onSubmit={handleSendMessage}>
-              <label htmlFor="message-transport">Send using</label>
-
-              <select
-                id="message-transport"
-                value={messageTransport}
-                onChange={(event) => setMessageTransport(event.target.value)}
-                disabled={messageSending}
-              >
-                <option value="http">HTTP</option>
-                <option value="socket">Socket.IO</option>
-              </select>
 
               <label htmlFor="message-content">Message</label>
 

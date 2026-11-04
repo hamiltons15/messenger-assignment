@@ -497,6 +497,12 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
       ...(type == "direct" ? { directKey } : {})
     });
 
+    io.to(
+      conversation.members.map(member => `user:${member.toString()}`)
+    ).emit("conversation:created", {
+      conversationId: conversation._id.toString()
+    });
+
     return res.status(201).json({
       message: "Conversation created successfully.",
       conversation: {

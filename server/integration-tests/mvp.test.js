@@ -309,6 +309,97 @@ test("Isolated Messenger API and Socket.IO verification", { timeout: 120000 }, a
       assert.equal(received.length, 0);
     });
 
+    await t.test("Conversation creation notifies members without messages and excludes outsiders", async () => {
+      const alice = await connect(accounts.alice.token);
+      const bob = await connect(accounts.bob.token);
+      const dave = await connect(accounts.dave.token);
+      const carol = await connect(accounts.carol.token);
+
+      const outsiderEvents = [];
+      const memberEvents = [];
+
+      carol.on("conversation:created", event => outsiderEvents.push(event));
+        for (const socket of [alice, bob, dave]) {
+          socket.on("conversation:created", event => memberEvents.push(event));
+        }
+
+      const bobNotice = once(bob, "conversation:created", {
+        signal: AbortSignal.timeout(4000)
+        });
+      const daveNotice = once(dave, "conversation:created", {
+         signal: AbortSignal.timeout(4000)
+        });
+
+      const created = await request("/api/conversations", {
+        token: accounts.alice.token,
+        method: "POST",
+        body: {
+          type: "group",
+          usernames: ["bob", "dave"],
+                      name: "Realtime creation test"
+          }
+        });
+
+       assert.equal(created.status, 201);
+
+      const conversationId = created.body.conversation.id;
+
+      assert.deepEqual((await bobNotice)[0], { conversationId });
+      assert.deepEqual((await daveNotice)[0], { conversationId });
+
+      const listing = await request("/api/conversations", {
+                token: accounts.bob.token
+        });
+
+      assert.equal(
+        listing.body.conversations.some(c => c.id === conversationId),
+        true
+        );
+
+      const duplicate = await request("/api/conversations", {
+        token: accounts.alice.token,
+        method: "POST",
+        body: {
+            type: "group",
+            usernames: ["bob", "dave"],
+            name: "Realtime creation test"
+          }
+        });
+
+        // Group conversations may legitimately have identical members.
+        // Verify a second successful creation produces its own notification.
+        assert.equal(duplicate.status, 201);
+
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      assert.equal(outsiderEvents.length, 0);
+      assert.equal(memberEvents.length, 6);
+
+
+      const eventsBeforeDuplicate = memberEvents.length;
+
+       const duplicateDirect = await request("/api/conversations", {
+         token: accounts.alice.token,
+         method: "POST",
+         body: {
+           type: "direct",
+           usernames: ["bob"]
+         }
+       });
+
+       assert.equal(duplicateDirect.status, 409);
+       assert.equal(duplicateDirect.body.conversation.id, direct);
+
+       await new Promise(resolve => setTimeout(resolve, 150));
+
+       assert.equal(memberEvents.length, eventsBeforeDuplicate);
+       assert.equal(outsiderEvents.length, 0);
+
+      for (const socket of [alice, bob, dave, carol]) {
+        socket.disconnect();
+        }
+      });
+
     await t.test("Transient activity reaches current members without subscriptions and excludes outsiders", async () => {
       const bob = await connect(accounts.bob.token);
       const dave = await connect(accounts.dave.token);
