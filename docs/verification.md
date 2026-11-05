@@ -1,12 +1,30 @@
 # Messenger Implementation Verification
 
+**Verification record status:** Historical test results are preserved by execution date. The November 1 release run passed 53 automated tests; the November 4 update and November 5 fresh-source release run each recorded 54. Implementation commit `261e429` was documented as pushed to both repositories on November 4. The current documentation revisions are uncommitted, and final committed-clone verification remains outstanding.
+
+## November 4, 2026 — Real-time messaging update verification
+
+This entry supplements the earlier release verification records without replacing their historical results.
+
+- Backend unit tests: 29 passed, 0 failed.
+- Frontend helper tests: 5 passed, 0 failed.
+- Isolated integration tests: 20 passed, 0 failed.
+- Total automated checks: 54 passed, 0 failed.
+- Vite production build: passed, 47 modules transformed.
+- `git diff --check`: passed.
+- Manual two-browser verification: connected participants saw newly created conversations without refresh; bidirectional Socket.IO message sending worked without refresh.
+- New integration coverage: authorized conversation creation notifications, outsider exclusion, repeated group creation, and rejected duplicate direct-conversation notification suppression.
+- Implementation commit: `261e429`, pushed successfully to both `origin/main` and `stiffler/main`.
+
+The November 1 full release-verification result remains historical. On November 5, `npm run test:release` passed from a fresh source export: 29 backend unit tests, 5 frontend unit tests, and 20 integration tests (54 total), plus ESLint, Vite production build (47 modules transformed), and built-client HTTP/API/Socket.IO smoke checks. The run reported successful fresh-source installation, testing, linting, building, and startup. Final committed-clone verification remains outstanding.
+
 ## Purpose
 
 This document records the implementation tests performed for the Messenger application, their results, and any known limitations.
 
 ## IA-06 release verification — October 31, 2026
 
-This section records current completion work separately from the historical TP1–TP8 records below. Historical outcomes are preserved and were not rewritten as new executions. Browser observations here came from actual Firefox instances; API/socket tests alone are not browser evidence.
+This section records the October 31 completion work separately from the historical TP1–TP8 records below. Its test counts and observations describe the runs performed at that stage and are not replacements for the later November 4–5 results. Historical outcomes are preserved and were not rewritten as new executions. Browser observations here came from actual Firefox instances; API/socket tests alone are not browser evidence.
 
 ### Reproduce the automated checks
 
@@ -119,7 +137,7 @@ Record the observer/date, account names, browser profiles, exact message texts, 
 
 Profile editing, persistent unread positions/counts, and browser edit/delete/member-management controls are approved deferrals. Existing owner/creator-authorized APIs remain and are regression-tested. Transient activity notices remain in scope; they are not persisted unread tracking. No deferred functionality is claimed complete.
 
-Fresh-source installation/build/start evidence is recorded after release verification below. Docker Compose configuration can be validated without daemon access, but new container/volume provisioning cannot be certified here because Docker socket access is denied. Existing local MongoDB is reachable and all test writes use generated test databases. No clean committed clone or remote submission is claimed before the owner commits/pushes. No secrets, normal database records, or reference files were modified.
+Fresh-source installation/build/start evidence is recorded after release verification below. Docker Compose configuration can be validated without daemon access, but new container/volume provisioning cannot be certified here because Docker socket access is denied. Existing local MongoDB is reachable and all test writes use generated test databases. At the October 31 review stage, no clean committed clone or remote submission was claimed. A subsequent implementation commit was documented as pushed on November 4, but the final committed-clone verification remains outstanding. No secrets, normal database records, or reference files were modified during the recorded checks.
 
 ## Historical TP1–TP8 evidence (preserved)
 
@@ -840,4 +858,4 @@ The October 31 automated Firefox acceptance demonstrations reported earlier in t
 
 Historical TP8 limitations reflect the state of the project at that time. Subsequent MVP completion added automated browser acceptance coverage, as recorded in the October 31 completion evidence.
 
-Final Git staging, commit, remote pushes, and committed-clone verification remain outstanding at the time of this entry.
+At the time of this November 1 entry, final Git staging, commit, remote pushes, and committed-clone verification remained outstanding. The November 4 implementation commit and its documented pushes occurred later; committed-clone verification is still outstanding.

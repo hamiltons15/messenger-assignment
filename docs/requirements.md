@@ -1,47 +1,66 @@
 # Messenger Requirements Engineering
 
-**Project:** Messenger Application  
-**Student:** Sean Hamilton  
-**Course:** CPS 490 - Capstone I  
-
-**Document Status:** Draft 
-**Last Revised:** October 31, 2026
-
-**Submission Date:** October 12, 2026
+**Project:** Messenger Application
+**Student:** Sean Hamilton
+**Course:** CPS 490 - Capstone I
+**Document Status:** Revised for IA-06 MVP
+**Original Submission Date:** October 12, 2026
+**Last Revised:** November 5, 2026
 
 ---
 
-### Revision History
+## Revision History
 
 | Date | Revision | Description |
 |---|---|---|
-| October 12, 2026 | Initial Requirements | Established the original functional requirements, nonfunctional requirements, acceptance criteria, assumptions, open questions, and traceability for the Messenger application. |
-| October 19, 2026 | IA-06 Requirements Revision | Updated the requirements to reflect the required implementation technology stack, internal account registration and authentication, conversation authorization, persistent messaging, real-time delivery, application reliability, and reproducible local execution. Expanded the functional requirements, nonfunctional requirements, acceptance criteria, and traceability mappings while preserving existing requirement identifiers. Reviewed assumptions and open questions to distinguish established implementation requirements from unresolved design decisions. |
-| October 22, 2026 | Authentication Implementation Decisions | Updated UQ-07 and UQ-10 to document registration and authentication decisions made during implementation. Established username validation rules, case insensitive username uniqueness, and password requirements of 6 or more characters with a maximum of 72 UTF-8 bytes. Defined JWT expiration as one hour, requiring users to log in again after expiration. Updated the remaining open questions to reflect the decisions that have been resolved. |
-| October 26, 2026 | Conversation Implementation Decisions | Documented the conversation creation rules established during implementation. Confirmed that direct conversations require exactly two distinct registered users, group conversations require at least three distinct registered users, and the authenticated creator must be included in the conversation membership. Verified that conversation creation enforces input validation, membership authorization, and persistent storage. |
+| October 12, 2026 | Initial Requirements | Established functional and nonfunctional requirements, acceptance criteria, assumptions, unresolved questions, and traceability. |
+| October 19, 2026 | IA-06 Requirements Revision | Aligned the requirements with the IA-06 technology stack, authentication, authorization, persistent messaging, real-time delivery, reliability, and reproducible execution. |
+| October 22-29, 2026 | Implementation Decisions | Documented registration validation, authentication, conversation creation, group membership permissions, message history, and direct-conversation uniqueness decisions. The October 22 authentication decision initially specified a one-hour JWT expiration; the final implemented policy is eight hours. |
+| October 31, 2026 | MVP Scope Reconciliation | Established the approved IA-06 MVP scope, distinguished implemented backend functionality from deferred browser features, and reconciled authentication and messaging decisions. |
+| November 4-5, 2026 | Final Implementation and Verification Updates | Documented Socket.IO-only browser message submission, automatic conversation discovery notifications, direct-conversation uniqueness verification, and the latest automated release verification results. |
 
 ---
 
-## IA-06 MVP release disposition — approved October 31, 2026
+## IA-06 MVP Scope and Requirements Interpretation
 
-The owner approved completion of the IA-06 minimum and the explicit deferrals below. Stable FR/AC/NFR/UQ identifiers and original full-product descriptions are retained. This disposition qualifies those descriptions for the November 2 release; deferred portions are not implemented or verified MVP acceptance criteria. No mandatory IA-06 behavior is deferred.
+The requirements in this document describe the Messenger application and its intended functionality. The original functional requirements, acceptance criteria, nonfunctional requirements, and design-decision identifiers are retained to preserve traceability throughout the project.
 
-| Requirement/decision | IA-06 disposition |
+For the IA-06 implementation, the project owner approved a minimum viable product (MVP) scope on October 31, 2026. This scope preserves the required registration, authentication, direct messaging, group messaging, persistence, authorization, real-time communication, error handling, and reproducible local execution capabilities.
+
+Some functionality described in the original requirements remains part of the broader product scope but was explicitly deferred from the browser-based MVP. These deferrals do not remove existing backend functionality or change the security requirements.
+
+Deferred browser features are not considered implemented or verified MVP acceptance criteria. The existence of a corresponding backend API does not establish completion of the deferred browser functionality. No mandatory IA-06 behavior is deferred.
+
+### Approved MVP Scope
+
+| Requirement | MVP disposition |
 |---|---|
-| FR-01/02/03/05/09/10/11/12; NFR-01/03/04/05 | Mandatory MVP: browser registration/login/logout/current identity, username-based direct/group creation, authorized listing, persistent ordered history, membership enforcement, live delivery/recovery, reliable states, and reproducibility. |
-| FR-04 / AC-04 | Group creation remains mandatory. Existing creator-only add/remove APIs and security rules remain implemented; browser membership-management controls are deferred. |
-| FR-06 / AC-06 / UQ-06 | Existing owner-only edit and soft-delete APIs remain implemented and regression-tested. Browser edit/delete controls are deferred. No claim of complete browser FR-06 verification is made. |
-| FR-07 / AC-07; unread portions of UQ-09 | Transient in-app conversation activity notices are implemented for connected members. Persistent unread tracking/read positions/counts are deferred. Live display remains mandatory under FR-11. |
-| FR-08 / AC-08 / UQ-07 | Current account ID/username and identification remain implemented. Profile editing is deferred; it is not a verified feature. |
-| UQ-09 | Local-time message timestamps and Sending/Sent/unconfirmed-failure presentation remain in scope. No Delivered/Read status or automatic write retry. |
-| UQ-05 | Voluntary group leaving remains an unresolved future feature, not a new IA-06 obligation. |
-| NFR-02 | Read with this release disposition: preserve the required stack and existing APIs; additional full-product features are not required to declare the IA-06 MVP ready. |
+| FR-01, FR-02, FR-03, FR-05, FR-09, FR-10, FR-11, FR-12; NFR-01, NFR-03, NFR-04, NFR-05 | Required MVP functionality, including account management, messaging, conversation discovery, authorization, persistence, real-time delivery, reliability, and reproducible execution. |
+| FR-04 / AC-04 | Group creation is required. Existing creator-only membership-management APIs are retained; browser controls for adding and removing members are deferred. |
+| FR-06 / AC-06 / UQ-06 | Sender-only message editing and soft deletion remain implemented through backend APIs. Browser edit/delete controls are deferred. |
+| FR-07 / AC-07 | Transient in-app message activity notifications are implemented. Persistent unread tracking and unread counts are deferred. |
+| FR-08 / AC-08 / UQ-07 | Current account identification is implemented. Profile modification is deferred. |
+| UQ-09 | Message timestamps, submission feedback, and recovery behavior remain in scope. Delivered/Read indicators and automatic write retries are not included. |
+| UQ-05 | Voluntary group leaving remains unresolved future functionality. |
+| NFR-02 | The approved MVP interpretation governs the release scope while preserving the required technology stack and existing APIs. |
 
-Justification: the deferred browser/profile/unread features are not explicitly required by IA-06, are not dependencies of its account/direct/group/history/security workflows, and would consume near-deadline implementation and verification effort. Authorization and test isolation are not reduced. The preserved management APIs retain creator-only permissions, minimum group size, removal revocation, and current-member full-history rules.
+The approved deferrals do not weaken authentication, authorization, conversation membership enforcement, or persistence requirements. Implemented backend operations retain their established security rules.
 
-Revision decision: the October 22 revision-history reference to one-hour JWTs describes the earlier decision. The current UQ-10 decision and implementation use **eight hours**; no token-security policy is changed by this reconciliation. Browser JWTs remain in memory; logout discards them and disconnects the socket without server-side revocation.
+### Final Implementation Clarifications
 
-The implementation accepts either legacy member IDs or `usernames` (never both) for conversation creation. Username input lists other registered users only; the backend includes the verified creator automatically, resolves names case-insensitively, and enforces the existing cardinality, membership, and uniqueness rules. Optional group names are limited to 80 characters. Participants are shown by username without exposing password hashes.
+The browser submits new messages through Socket.IO. The existing HTTP message API remains available for compatibility and verification.
+
+When a direct or group conversation is successfully created and persisted, the backend emits `conversation:created` notifications to the authenticated participants' user rooms. Connected clients refresh their authorized conversation lists, allowing newly created conversations to appear without requiring a manual refresh.
+
+Direct-conversation uniqueness is enforced through the established canonical participant key and database uniqueness constraint. Duplicate creation attempts do not create an additional direct conversation.
+
+Conversation creation accepts either legacy member identifiers or a list of usernames, but not both in the same request. When usernames are supplied, the list identifies other registered users, and the backend automatically includes the authenticated creator. Usernames are resolved case-insensitively. The backend enforces the established participant-count, membership, and direct-conversation uniqueness rules. Optional group names are limited to 80 characters. The browser identifies conversation participants by username without exposing password hashes.
+
+JWTs expire after eight hours. The browser holds its JWT in memory and discards it on logout; logout does not revoke an independently retained token on the server.
+
+The detailed requirements, acceptance criteria, and design decisions in the following sections define these behaviors and distinguish implemented MVP functionality from deferred features.
+
+---
 
 ## 1. System Context
 
@@ -210,6 +229,8 @@ The Messenger system shall allow authenticated users to receive new private and 
 
 When an authenticated user sends a message, the system shall validate the request, verify the sender's conversation membership, and successfully store the message in MongoDB before emitting a real time delivery event to the authorized conversation participants.
 
+The browser interface shall submit new messages through authenticated Socket.IO events. The backend may retain an authenticated HTTP message-creation endpoint for compatibility and verification, subject to the same persistence and authorization requirements.
+
 The system shall associate each real time message event with the correct conversation and shall deliver the event only to users authorized to participate in that conversation.
 
 The system shall verify user authentication when establishing protected Socket.IO connections and shall enforce conversation membership restrictions before allowing users to subscribe to conversation events.
@@ -227,6 +248,8 @@ The system shall identify the conversations associated with the authenticated us
 The system shall retrieve conversation membership information from persistent storage and shall exclude conversations in which the authenticated user is not an authorized participant.
 
 When a user creates a new conversation or an authorized membership change occurs, the system shall reflect the updated conversation membership when the user's conversation list is retrieved.
+
+After successfully persisting a new direct or group conversation, the backend shall notify its authenticated participants through Socket.IO. Connected browser clients shall respond by refreshing their authorized conversation lists, allowing newly created conversations to become visible without manual refresh. The notification shall identify the conversation without replacing backend membership authorization.
 
 The system shall determine the requesting user's identity through their verified authenticated session rather than relying on a user identifier supplied by the browser.
 
@@ -597,6 +620,8 @@ The system shall not require deployment to an externally hosted production envir
 
 10. A temporary disconnection does not cause previously stored messages to be lost.
 
+11. The browser submits new messages through Socket.IO, and the backend applies the established authentication, membership, validation, and persistence-before-broadcast rules.
+
 **Verification Method:** Demonstration and automated testing using multiple authenticated browser sessions, Socket.IO clients, authorized and unauthorized conversation participants, simulated database failures, and temporary client disconnections to verify real time delivery, persistence before broadcasting, access control, and offline recovery.
 
 ### AC-12 - Conversation Discovery and Listing
@@ -625,7 +650,11 @@ The system shall not require deployment to an externally hosted production envir
 
 10. Conversation lists reflect the stored conversation and membership information after the backend application restarts.
 
-**Verification Method:** Demonstration and automated testing using multiple registered accounts to verify authorized conversation listing, private and group conversation visibility, conversation creation, membership changes, persistent conversation information, and rejection of unauthorized requests.
+11. When a new direct or group conversation is successfully persisted, connected authorized participants receive a Socket.IO conversation-creation notification and automatically refresh their conversation lists without manually refreshing the browser.
+
+12. Users who are not participants do not receive the protected conversation-creation notification. A rejected duplicate direct-conversation creation does not generate a new-conversation notification.
+
+**Verification Method:** Demonstration and automated testing using multiple registered accounts to verify authorized conversation listing, private and group conversation visibility, conversation creation, membership changes, persistent conversation information, participant notifications and automatic list refresh, outsider exclusion, rejected duplicate direct-conversation notifications, and rejection of unauthorized requests.
 
 ### AC-13 - Application Reliability and Error Handling
 
@@ -722,33 +751,25 @@ External identity providers and existing institutional account directories are n
 
 #### UQ-02 - Notification Method and Behavior
 
-**Status:** Resolved for the MVP
+**Status:** Resolved for the IA-06 MVP; persistent unread tracking deferred.
 
-**MVP decision (October 31):** A transient in-app notice identifies the conversation when another user sends a saved message. Current membership is queried before sending activity to authenticated user rooms, including when the recipient is viewing another conversation. The notice also appears for the currently open conversation and is cleared when that conversation is selected or on logout. It retains only the latest activity in component memory; there is no unread count, read-position storage, or notification replay. The historical presentation questions below are superseded by this decision for the release.
+**Question:** How will Messenger notify authenticated users about new private and group messages?
 
-**Question:** How will the Messenger system present notifications for new private and group messages, and how should those notifications behave depending on the user's current activity?
+**Resolution:**
 
-**Established Decisions:**
+Messenger provides transient in-app notifications through Socket.IO to connected, authorized conversation participants.
 
-The Messenger system will provide in app notifications for new messages received in private and group conversations.
+When another user sends a successfully persisted message, the application displays a notification identifying the associated conversation. Notifications are supported whether the recipient is viewing that conversation or another conversation.
 
-Notifications will be delivered to connected, authorized users through Socket.IO. The system will enforce conversation membership restrictions to prevent unauthorized users from receiving protected notification information.
+The backend checks current conversation membership before sending notification activity to authenticated user rooms. Users who are not authorized participants must not receive protected notification information.
 
-External notification services, email notifications, and operating system push notifications are not required for the Messenger implementation.
+The browser retains only the latest notification in component memory. Notifications are cleared when the associated conversation is selected or the user logs out.
 
-**Remaining Open Questions:**
-
-1. Will Messenger use unread message indicators, notification badges, temporary alerts, or a combination of these methods?
-
-2. Should a notification appear when the user is already viewing the conversation in which the new message was received?
-
-3. When should a notification or unread indicator be cleared?
-
-4. What conversation information should be displayed in a notification?
+Persistent unread counts, read-position tracking, notification history, and notification replay are deferred from the IA-06 MVP. External email, push, and operating-system notifications are not required.
 
 **Related Requirements:** FR-07, FR-09, FR-11, AC-07, AC-11
 
-**Source:** Statement of Work, Section 3.1, Real Time Messaging and Notifications; IA-06, Real-Time Delivery and Socket.IO Authorization Requirements.
+**Source:** Statement of Work, Section 3.1, Real-Time Messaging and Notifications; IA-06, Real-Time Delivery and Socket.IO Authorization Requirements.
 
 
 #### UQ-03 - Group Membership Permissions
@@ -839,33 +860,25 @@ When a user is no longer an authorized group member, the system will prevent tha
 
 #### UQ-06 - Message Editing and Deletion Behavior
 
-**Status:** Partially resolved for backend; browser controls deferred
+**Status:** Backend behavior resolved and implemented; browser controls deferred.
 
-**Implementation decisions (October 31):** Current members may edit/delete their own active messages without a time window. Deletion retains a placeholder and timestamps. Previous content is overwritten; no edit-history store is implemented. Changes appear on history retrieval; immediate edit/delete broadcasts are not implemented. The historical design questions below remain future considerations where not answered here.
+**Question:** How will Messenger handle message editing and deletion, including authorization, persistence, and presentation?
 
-**Question:** How will the Messenger system handle message editing and deletion, including time restrictions, message history presentation, and updates to other conversation participants?
+**Resolution:**
 
-**Established Decisions:**
+Authenticated users who are current conversation members may edit or delete their own active messages through the existing backend APIs. The backend verifies the authenticated user's identity, current conversation membership, and original message ownership before permitting modifications.
 
-The Messenger system will allow authenticated users to edit and delete messages they originally sent.
+No editing or deletion time limit is imposed in the implemented backend.
 
-The backend will verify the authenticated user's identity and enforce message ownership before allowing an edit or deletion.
+Editing updates the stored message content. The system does not maintain a separate history of previous message content. Successful edits retain an `editedAt` timestamp in the stored message. Displaying an edited-message indicator in the browser is not part of the verified IA-06 MVP functionality.
 
-Successful message changes will be persisted in MongoDB. Unauthorized or unsuccessful modification attempts will not change the stored message.
+Deletion uses soft deletion: the message record is retained with a deletion placeholder and associated deletion timestamp rather than being permanently removed from the database.
 
-The system will preserve conversation access restrictions when processing message modifications.
+Message edits and deletions remain reflected in subsequent authorized history retrievals. Immediate Socket.IO broadcasts of edit and deletion changes are not implemented.
 
-**Remaining Open Questions:**
+Browser controls for editing and deleting messages are deferred from the IA-06 MVP. The existing backend operations and their authorization requirements remain part of the implemented system.
 
-1. Will users be allowed to edit or delete their messages at any time, or will a time limit apply?
-
-2. Will edited messages display an indicator showing that their content has been modified?
-
-3. When a message is deleted, will it be removed entirely from the conversation or replaced with a placeholder indicating that a message was deleted?
-
-4. Will message edits and deletions be reflected immediately for other connected conversation participants through Socket.IO?
-
-5. Will the system retain any record of previous message content after an edit or deletion?
+**Deferred functionality:** Browser edit/delete controls, immediate real-time synchronization of message modifications, and separate message-edit history.
 
 **Related Requirements:** FR-06, FR-09, FR-11, AC-06, AC-09, AC-11
 
@@ -874,43 +887,29 @@ The system will preserve conversation access restrictions when processing messag
 
 #### UQ-07 - Basic Profile Information
 
-**Status:** Partially Resolved
+**Status:** Account identification resolved and implemented; profile editing deferred.
 
-**Question:** What user information will the Messenger system collect during registration, display in user profiles, and allow users to modify?
+**Question:** What account information will Messenger collect, display, and allow users to modify?
 
-**Established Decisions:**
+**Resolution:**
 
-The Messenger system will support internal user registration using a username and password. An email address and display name will not be required during registration.
+Messenger manages registered user accounts internally using a username and password. Registration does not require an email address or display name.
 
-Each registered user will have a unique account ID and a unique username. The username will serve as the account identifier used for login and identifying registered users within Messenger.
+Each registered account has a unique user ID and username. Usernames must contain 3–30 characters consisting of letters, numbers, or underscores. Username uniqueness is case-insensitive.
 
-The system will securely hash account passwords using bcrypt before storing them in MongoDB. Plaintext passwords will not be stored, and password hashes will not be exposed in account or profile responses.
+Passwords must contain at least six characters and must not exceed 72 bytes when encoded as UTF-8. Passwords are stored as bcrypt hashes rather than plaintext.
 
-The system will validate registration information and reject requests containing missing required fields or usernames that are already registered.
+Authenticated users can retrieve their own account identification information. The application also displays participant usernames to identify users in conversations without exposing password hashes.
 
-The system will use JWT based authentication to identify users accessing protected functionality.
+**Deferred functionality:** Profile editing, profile pictures, biographies, and additional customizable profile fields are not included in the IA-06 MVP.
 
-Authenticated users will be able to view and update permitted profile information. The backend will validate profile changes and enforce authorization to prevent users from modifying another user's account information without permission.
+**Future design questions:** If profile editing is implemented later, the permitted fields, visibility rules, and treatment of username changes in existing conversations will require further decisions.
 
-Usernames must contain between 3 and 30 characters and may include letters, numbers, and underscores. Username uniqueness will be enforced without regard to letter case, so usernames such as `Sean` and `sean` cannot belong to separate accounts.
-
-The backend will reject registration requests containing usernames that do not satisfy these validation rules.
-
-**Remaining Open Questions:**
-
-1. Which profile fields will be visible to other registered users?
-
-2. Which profile fields will users be allowed to modify after registration?
-
-3. Will Messenger support optional profile information, such as a profile picture or short biography?
-
-4. If a user changes their username or other identifying profile information, how should that change appear in existing conversations and message history?
+**Implementation Decision:** October 21, 2026. Registration requires a unique username and password without requiring an email address or display name.
 
 **Related Requirements:** FR-01, FR-08, FR-09, FR-10, AC-01, AC-08, AC-10
 
 **Source:** Statement of Work, Section 3.1, User Registration and Authentication and User Profiles; IA-06, Account Registration and Authentication Requirements.
-
-**Implementation Decision:** October 21, 2026. Registration will require a unique username and password without requiring an email address or display name.
 
 
 #### UQ-08 - History Persistence and Retention
@@ -985,37 +984,27 @@ Connection interruptions will not change the established definition of the Sent 
 
 #### UQ-10 - Security Protections
 
-**Status:** Partially Resolved
+**Status:** Core MVP security protections resolved and implemented; additional safeguards remain future considerations.
 
-**Question:** What security protections will the Messenger system implement to protect user accounts, messages, and conversation access?
+**Question:** What security protections will Messenger implement to protect user accounts, messages, and conversation access?
 
-**Established Decisions:**
+**Resolution:**
 
-The Messenger system will use bcrypt to securely hash user passwords before storing account credentials in MongoDB. Plaintext passwords will not be stored.
+Messenger uses bcrypt to hash registered-user passwords. Passwords are never stored in plaintext.
 
-The system will use JSON Web Tokens (JWTs) to authenticate registered users. The backend will verify authentication for protected operations and determine the acting user's identity from the verified token rather than trusting user identifiers supplied by the browser.
+The backend issues JWTs with an eight-hour expiration period and verifies their signatures and required claims before granting protected access. The authenticated user's identity is derived from the verified token rather than client-supplied identifiers.
 
-The backend will enforce conversation membership authorization for both HTTP requests and Socket.IO operations. Users who are not authorized members of a conversation will not be permitted to retrieve its messages, send messages to it, or subscribe to its protected events.
+The browser retains its JWT in memory during the authenticated session. Logout discards the browser's token and disconnects its Socket.IO connection. Logout does not revoke a copied JWT on the server.
 
-Socket.IO connections will be authenticated, and the backend will verify authorization before allowing users to join protected conversation rooms. Membership changes will be reflected in access controls so that removed members cannot continue receiving protected events.
+The backend enforces current conversation membership for protected HTTP and Socket.IO operations. Unauthorized users cannot retrieve conversation history, send messages, or subscribe to protected conversation events.
 
-The system will validate submitted information and reject unauthorized operations without modifying protected data.
+Socket.IO connections require authentication, and token expiration is enforced for active connections. Removed group members lose subsequent protected access and event subscriptions.
 
-Application secrets and credentials will be excluded from version control. The project will provide an example environment configuration file without including actual secrets.
+Registration validates usernames and passwords. Passwords must contain at least six characters and must not exceed 72 bytes when encoded as UTF-8. No specific combination of uppercase letters, lowercase letters, numbers, or special characters is required.
 
-Account passwords must contain at least 6 characters and must not exceed 72 bytes when encoded as UTF-8. The system will not require passwords to contain specific combinations of uppercase letters, lowercase letters, numbers, or special characters.
+Application secrets and credentials are excluded from version control. The repository provides example environment configuration without usable authentication secrets.
 
-The backend will enforce these password validation rules during registration and securely hash accepted passwords using bcrypt before storing them.
-
-The Messenger system will issue JWTs with an expiration period of eight hours. The backend will reject expired tokens when users attempt to access protected operations. Users whose authentication tokens expire will be required to log in again to obtain a new token. Socket.IO connections will also enforce token expiration so that an authenticated connection cannot continue receiving protected conversation events after its JWT expires.
-
-**Remaining Open Questions:**
-
-1. How will the browser store and manage authentication tokens during an active session?
-
-2. Will additional protections, such as login attempt limits or account lockouts, be implemented?
-
-3. What additional safeguards, if any, will be needed for the local development and evaluation environment?
+**Future considerations:** Login-attempt rate limiting, account lockouts, and additional deployment-specific safeguards are outside the verified MVP scope.
 
 **Related Requirements:** FR-01, FR-09, FR-10, NFR-01, NFR-04, NFR-05, AC-01, AC-09, AC-10, AC-13, AC-14
 
@@ -1024,31 +1013,25 @@ The Messenger system will issue JWTs with an expiration period of eight hours. T
 
 #### UQ-11 - Direct Conversation Creation and Duplicate Prevention
 
-**Status:** Partially Resolved
+**Status:** Resolved and verified.
 
 **Question:** How will Messenger create direct conversations between registered users while preventing unintended duplicate conversations?
 
-**Established Decisions:**
+**Resolution:**
 
-A direct conversation will contain exactly two distinct registered users. The authenticated user creating the conversation must be one of those members.
+A direct conversation contains exactly two distinct registered users, including the authenticated creator.
 
-The backend will validate both member identifiers, confirm that the registered users exist, and reject invalid or unauthorized creation requests.
+The backend validates the requested participants, confirms that their accounts exist, and enforces the authenticated creator's membership.
 
-Before creating a direct conversation, the backend will check whether a direct conversation already exists between the same two users, regardless of the order in which their identifiers are provided.
+To prevent duplicate direct conversations, the backend generates a canonical `directKey` from the two participants' identifiers in a consistent order. MongoDB enforces uniqueness through a unique partial index.
 
-If an existing direct conversation is found, the current implementation will reject the duplicate creation request with an HTTP 409 Conflict response.
+If a direct conversation already exists between the same participants, the backend rejects the duplicate creation request with HTTP 409 Conflict, regardless of participant ordering or whether requests occur concurrently.
 
-Direct conversations will be stored persistently in MongoDB.
+Authorized participants can access the existing conversation through the conversation-listing functionality defined in FR-12. Rejected duplicate requests do not create new conversations or trigger new-conversation notifications.
 
-The HTTP 409 Conflict response will remain the established behavior when a duplicate direct conversation is requested. Authorized participants will be able to locate and access the existing conversation through the conversation listing functionality defined in FR-12.
+**Verification:** Automated integration tests verify sequential and concurrent duplicate prevention, uniqueness enforcement, and HTTP 409 responses. The database's unique partial index on the canonical `directKey` prevents concurrent requests from creating duplicate records.
 
-To prevent duplicate direct conversations during simultaneous creation requests, the backend will generate a canonical identifier from the two participants' user identifiers in a consistent order. MongoDB will enforce uniqueness through a unique index on this identifier. Attempts to create a duplicate direct conversation, including concurrent requests, will return HTTP 409 Conflict. The backend will continue to verify the authenticated user's identity and conversation membership before creating a conversation.
-
-**Remaining Open Questions:**
-
-1. How should Messenger prevent duplicate direct conversations when simultaneous creation requests occur?
-
-**Related Requirements:** FR-02, FR-09, FR-10, AC-02, AC-09, AC-10
+**Related Requirements:** FR-02, FR-09, FR-10, FR-12, AC-02, AC-09, AC-10, AC-12
 
 **Source:** Statement of Work, Section 3.1, Private Messaging; IA-06, Direct Conversation and Authorization Requirements.
 

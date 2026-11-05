@@ -54,7 +54,7 @@ Accounts are stored in MongoDB, and passwords are stored as bcrypt hashes rather
 
 To start a direct conversation, enter one other registered username. For a group, enter at least two other registered usernames separated by commas; your account is included automatically. An optional group name helps identify it.
 
-Select a conversation and send messages. Connected recipients receive a transient new-message notice; no persistent unread counts are kept. Existing participants can use **Refresh conversations** to discover a conversation someone else created. Direct duplicates open the existing conversation when its ID is returned, or remain accessible from the refreshed list.
+Select a conversation and send messages. Connected recipients receive a transient new-message notice; no persistent unread counts are kept. Connected participants automatically receive new-conversation notifications through Socket.IO, which refresh their authorized conversation lists. **Refresh conversations** remains available as a manual fallback. Direct duplicates open the existing conversation when its ID is returned, or remain accessible from the refreshed list.
 
 History is displayed oldest first with local timestamps; **Load older messages** uses server cursors. **Refresh history** checks saved state after uncertain delivery. Logout discards the in-memory JWT and closes the socket; a page refresh requires login again. A JWT expires after eight hours. Client logout does not revoke a copied JWT on the server.
 
@@ -99,7 +99,7 @@ npm run preview --prefix client
 
 Open http://127.0.0.1:4173. Both development and preview forward `/api` and `/socket.io` to the backend. Preview is a local build check, not public production hosting. Override the backend target if needed with `MESSENGER_API_PORT=3001`; the dev port can be changed with `MESSENGER_CLIENT_PORT=5174`.
 
-Review the intended diff, configuration examples, test evidence, requirements/diagrams, and ignored-file rules. The repository owner must personally stage, commit, and push the reviewed release to the course repositories before the deadline. After that, repeat setup/checks from that actual final clone. This implementation work does not automatically submit anything.
+Review the intended diff, configuration examples, test evidence, requirements/diagrams, and ignored-file rules. The original submission deadline was November 2, 2026. The repository owner must review, stage, commit, and push any subsequent changes to the required repositories. After that, repeat setup/checks from that actual final clone. This implementation work does not automatically submit anything.
 
 ## Troubleshooting
 
@@ -130,6 +130,6 @@ Observed completion checks (October 31): 29 backend unit tests, 5 client helper 
 
 Independent release verification (November 1): `npm run test:release` passed in the Ubuntu development environment, including 53 automated checks (29 backend, 5 frontend, 19 integration), ESLint, production build, Docker Compose configuration validation, and built-client HTTP/API/Socket.IO smoke checks. The existing MongoDB 7.0 container was independently confirmed running.
 
-Fresh Docker provisioning was not performed, and final committed-clone verification and remote submission remain outstanding. See `docs/verification.md` for detailed evidence and limitations.
+Fresh Docker provisioning was not performed, and final committed-clone verification remains outstanding. Commit `261e429` was pushed to both the personal GitHub repository and the course repository. On November 4, all 54 automated tests passed (29 backend, 5 frontend, 20 integration), and the frontend production build succeeded. On November 5, `npm run test:release` passed with all 54 automated tests, ESLint, production build, and built-client HTTP/API/Socket.IO smoke checks. See `docs/verification.md` for detailed evidence and limitations.
 
 Engineering artifacts: [SOW](docs/statement-of-work.md), [requirements](docs/requirements.md), [analysis](docs/analysis.md), [ethics](docs/ethics-reflection.md), [traceability](docs/implementation-report.md), [verification](docs/verification.md), and [diagrams](docs/diagrams/).
