@@ -109,14 +109,12 @@ const conversationSchema = new mongoose.Schema(
   }
 );
 
-conversationSchema.pre("validate", function (next) {
+conversationSchema.pre("validate", function () {
   if (this.type === "group" && Array.isArray(this.members)) {
     this.groupKey = require("../utils/groupConversationKey")(this.name, this.members);
   } else {
     this.groupKey = undefined;
   }
-
-  next();
 });
 
 conversationSchema.index(

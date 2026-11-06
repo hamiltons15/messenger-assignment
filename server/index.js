@@ -496,7 +496,7 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
 
       if (existingConversation) {
         return res.status(409).json({
-          error: "A group conversation with this name and participants already exists.",
+          error: "Conversation already exists, use a different group name.",
           conversation: { id: existingConversation.id }
         });
       }
@@ -549,7 +549,7 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
       }).select("_id");
 
       return res.status(409).json({
-        error: "A group conversation with this name and participants already exists.",
+        error: "Conversation already exists, use a different group name.",
         conversation: { id: existingConversation?.id }
       });
     }

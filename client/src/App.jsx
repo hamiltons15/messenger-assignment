@@ -688,14 +688,23 @@ function App() {
         }),
       })
       if (requestId !== conversationCreateRequestRef.current) return
-      if (!response.ok && response.status !== 409) {
+      if (!response.ok) {
+        if (response.status === 409 && conversationType === 'direct') {
+          refreshConversations()
+          if (data.conversation?.id) selectConversation(data.conversation.id)
+          setNotice('This direct conversation already exists. Use it from your conversation list.')
+          setInviteeNames('')
+          setGroupName('')
+          return
+        }
+
         throw new Error(data.error || 'Unable to create conversation.')
       }
+
       refreshConversations()
       if (data.conversation?.id) selectConversation(data.conversation.id)
-      setNotice(response.status === 409
-        ? 'This direct conversation already exists. Use it from your conversation list.'
-        : 'Conversation created.')
+      setNotice('Conversation created.')
+
       setInviteeNames('')
       setGroupName('')
     } catch (err) {
