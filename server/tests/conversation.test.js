@@ -1,6 +1,7 @@
+const groupConversationKey = require("../utils/groupConversationKey");
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const validateConversation = require("../utils/validateConversation");
 
 const alice = "6ae27fc7ab1f7f38bdfab020";
 const bob = "6ae280b1ab1f7f38bdfab021";
@@ -55,3 +56,18 @@ test("Duplicate conversation members are rejected", () => {
     "Conversation members must be unique."
   );
 });
+
+test("Group identity ignores member ordering", () => {
+  assert.equal(
+    groupConversationKey("Project", [alice, bob, carol]),
+    groupConversationKey("Project", [carol, alice, bob])
+  );
+});
+
+test("Different group names are allowed with the same members", () => {
+  assert.notEqual(
+    groupConversationKey("Project", [alice, bob, carol]),
+    groupConversationKey("Family", [alice, bob, carol])
+  );
+});
+

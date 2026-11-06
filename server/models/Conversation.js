@@ -83,6 +83,25 @@ const conversationSchema = new mongoose.Schema(
         },
         message: "Direct conversations require a canonical pair key; groups must not have one."
       }
+    },
+    groupKey: {
+      type: String,
+      default: undefined,
+      validate: {
+        validator: function (value) {
+          if (this.type === "group") {
+            if (!Array.isArray(this.members) || this.members.length < 3) {
+              return false;
+            }
+
+            const expectedKey = require("../utils/groupConversationKey")(this.name, this.members);
+            return value === expectedKey;
+          }
+
+          return value === undefined;
+        },
+        message: "Groups require a canonical group key matching their normalized name and members."
+      }
     }
   },
   {
@@ -90,12 +109,32 @@ const conversationSchema = new mongoose.Schema(
   }
 );
 
+conversationSchema.pre("validate", function (next) {
+  if (this.type === "group" && Array.isArray(this.members)) {
+    this.groupKey = require("../utils/groupConversationKey")(this.name, this.members);
+  } else {
+    this.groupKey = undefined;
+  }
+
+  next();
+});
+
 conversationSchema.index(
   { directKey: 1 },
   {
     unique: true,
     partialFilterExpression: {
       directKey: { $type: "string" }
+    }
+  }
+);
+
+conversationSchema.index(
+  { groupKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      groupKey: { $type: "string" }
     }
   }
 );
