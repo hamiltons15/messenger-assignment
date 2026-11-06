@@ -47,7 +47,6 @@ io.on("connection", (socket) => {
   const millisecondsUntilExpiration =
     socket.data.tokenExpiresAt - Date.now();
 
-
   if (millisecondsUntilExpiration <= 0) {
     socket.disconnect(true);
     return;
@@ -100,69 +99,69 @@ io.on("connection", (socket) => {
   });
 
   socket.on("message:send", async (payload, acknowledge) => {
-     const reply =
-       typeof acknowledge === "function" ? acknowledge : () => {};
+    const reply =
+      typeof acknowledge === "function" ? acknowledge : () => {};
 
-     try {
-       const result = await createMessage(
-         payload?.conversationId,
-         socket.data.userId,
-         payload?.content
-       );
+    try {
+      const result = await createMessage(
+        payload?.conversationId,
+        socket.data.userId,
+        payload?.content
+      );
 
-       if (!result.ok) {
-         return reply(result);
-       }
+      if (!result.ok) {
+        return reply(result);
+      }
 
-       reply({
-         ok: true,
-         message: result.message
-       });
+      reply({
+        ok: true,
+        message: result.message
+      });
 
-       io.to(`conversation:${result.message.conversation}`).emit(
-         "message:new",
-         result.message
-       );
-       void notifyActivity(result.message);
-     } catch (error) {
-       console.error("Socket message creation failed:", error);
+      io.to(`conversation:${result.message.conversation}`).emit(
+        "message:new",
+        result.message
+      );
+      void notifyActivity(result.message);
+    } catch (error) {
+      console.error("Socket message creation failed:", error);
 
-       reply({
-         ok: false,
-         code: "server_error"
-       });
-     }
-   });
+      reply({
+        ok: false,
+        code: "server_error"
+      });
+    }
+  });
 
   socket.on("conversation:leave", async (conversationId, acknowledge) => {
-      const reply =
-        typeof acknowledge === "function" ? acknowledge : () => {};
+    const reply =
+      typeof acknowledge === "function" ? acknowledge : () => {};
 
-      if (
-        typeof conversationId !== "string" ||
-        !mongoose.isObjectIdOrHexString(conversationId)
-      ) {
-        return reply({
-          ok: false,
-          error: "Invalid conversation ID."
-        });
-      }
+    if (
+      typeof conversationId !== "string" ||
+      !mongoose.isObjectIdOrHexString(conversationId)
+    ) {
+      return reply({
+        ok: false,
+        error: "Invalid conversation ID."
+      });
+    }
 
-      try {
-        await socket.leave(`conversation:${conversationId}`);
+    try {
+      await socket.leave(`conversation:${conversationId}`);
 
-        return reply({
-          ok: true
-        });
-      } catch (error) {
-        console.error("Socket conversation leave failed:", error);
+      return reply({
+        ok: true
+      });
+    } catch (error) {
+      console.error("Socket conversation leave failed:", error);
 
-        return reply({
-          ok: false,
-          error: "Unable to leave conversation."
-        });
-      }
-    });
+      return reply({
+        ok: false,
+        error: "Unable to leave conversation."
+      });
+    }
+  });
 
   socket.on("disconnect", () => {
     clearTimeout(expirationTimer);
@@ -183,10 +182,10 @@ const validateConversation = require("./utils/validateConversation");
 const validateInvitees = require("./utils/validateInvitees");
 const validateMessage = require("./utils/validateMessage");
 const createMessage = require("./services/createMessage");
+const groupConversationKey = require("./utils/groupConversationKey");
 
 async function notifyActivity(message) {
   try {
-    // Re-read current membership; never use client claims or room visibility as policy.
     const conversation = await Conversation.findById(message.conversation).select("members");
     if (!conversation) return;
     io.to(conversation.members.map(member => `user:${member.toString()}`)).emit(
@@ -194,7 +193,6 @@ async function notifyActivity(message) {
       { conversationId: message.conversation, sender: message.sender, messageId: message.id }
     );
   } catch {
-    // The message is already saved: notification failure must not report write failure.
     console.error("Unable to notify conversation activity.");
   }
 }
@@ -413,11 +411,11 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
 
   const validationError = validateConversation(type, members);
 
-   if (validationError) {
-     return res.status(400).json({
-       error: validationError
-     });
-   }
+  if (validationError) {
+    return res.status(400).json({
+      error: validationError
+    });
+  }
 
   if (!Array.isArray(members) || members.length === 0) {
     return res.status(400).json({
@@ -466,10 +464,10 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
     });
 
     if (existingMembers !== members.length) {
-        return res.status(400).json({
-          error: "One or more conversation members do not exist."
-        });
-      }
+      return res.status(400).json({
+        error: "One or more conversation members do not exist."
+      });
+    }
 
     const directKey = type === "direct"
       ? members.map(member => member.toLowerCase()).sort().join(":")
@@ -489,12 +487,28 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
       }
     }
 
+    if (type === "group") {
+      const groupKey = groupConversationKey(name, members);
+      const existingConversation = await Conversation.findOne({
+        type: "group",
+        groupKey
+      }).select("_id");
+
+      if (existingConversation) {
+        return res.status(409).json({
+          error: "A group conversation with this name and participants already exists.",
+          conversation: { id: existingConversation.id }
+        });
+      }
+    }
+
     const conversation = await Conversation.create({
       type,
       members,
       createdBy: req.userId,
       ...(type === "group" && name?.trim() ? { name: name.trim() } : {}),
-      ...(type == "direct" ? { directKey } : {})
+      ...(type === "group" ? { groupKey: type === "group" ? groupConversationKey(name, members) : undefined } : {}),
+      ...(type === "direct" ? { directKey } : {})
     });
 
     io.to(
@@ -524,13 +538,28 @@ app.post("/api/conversations", requireDatabase, requireAuth, async (req, res) =>
       });
     }
 
+    if (
+      type === "group" &&
+      error.code === 11000 &&
+      (error.keyPattern?.groupKey || error.keyValue?.groupKey)
+    ) {
+      const existingConversation = await Conversation.findOne({
+        type: "group",
+        groupKey: error.keyValue?.groupKey || error.keyPattern?.groupKey
+      }).select("_id");
+
+      return res.status(409).json({
+        error: "A group conversation with this name and participants already exists.",
+        conversation: { id: existingConversation?.id }
+      });
+    }
+
     console.error("Conversation creation failed:", error);
 
     return res.status(500).json({
       error: "Unable to create conversation."
     });
   }
-
 });
 
 app.post(
@@ -722,7 +751,6 @@ app.delete(
   }
 );
 
-
 app.post(
   "/api/conversations/:conversationId/messages",
   requireDatabase,
@@ -892,11 +920,11 @@ app.patch(
 
     const validationError = validateMessage(content);
 
-       if (validationError) {
-         return res.status(400).json({
-           error: validationError
-         });
-       }
+    if (validationError) {
+      return res.status(400).json({
+        error: validationError
+      });
+    }
 
     try {
       const conversation = await Conversation.findOne({
